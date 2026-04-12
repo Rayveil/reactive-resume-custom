@@ -133,7 +133,7 @@ export const resumeRouter = {
       operationId: "createResume",
       summary: "Create a new resume",
       description:
-        "Creates a new resume with the given name, slug, and tags. Optionally initializes the resume with sample data by setting withSampleData to true. The slug must be unique across the user's resumes. Returns the ID of the newly created resume. Requires authentication.",
+        "Creates a new resume with the given name, slug, and tags. Optionally initializes the resume with sample data by setting withSampleData to true, or with prefilled resume data by passing data. The slug must be unique across the user's resumes. Returns the ID of the newly created resume. Requires authentication.",
       successDescription: "The ID of the newly created resume.",
     })
     .input(resumeDto.create.input)
@@ -151,7 +151,7 @@ export const resumeRouter = {
         tags: input.tags,
         locale: context.locale,
         userId: context.user.id,
-        data: input.withSampleData ? sampleResumeData : undefined,
+        data: input.withSampleData ? sampleResumeData : input.data,
       });
     }),
 

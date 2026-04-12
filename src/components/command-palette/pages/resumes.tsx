@@ -1,6 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { PlusIcon, ReadCvLogoIcon } from "@phosphor-icons/react";
+import { PencilSimpleLineIcon, ReadCvLogoIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { CommandLoading } from "cmdk";
@@ -53,8 +53,8 @@ export function ResumesCommandGroup() {
 
       <BaseCommandGroup page="resumes" heading={<Trans>Resumes</Trans>}>
         <CommandItem onSelect={onCreate}>
-          <PlusIcon />
-          <Trans>Create a new resume</Trans>
+          <PencilSimpleLineIcon />
+          <Trans>Create resume with details</Trans>
         </CommandItem>
 
         {isLoading ? (

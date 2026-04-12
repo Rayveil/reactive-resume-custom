@@ -10,8 +10,8 @@ export function CreateResumeCard() {
 
   return (
     <BaseCard
-      title={t`Create a new resume`}
-      description={t`Start building your resume from scratch`}
+      title={t`Create resume with details`}
+      description={t`Save your personal information and start editing`}
       onClick={() => openDialog("resume.create", undefined)}
     >
       <div className="absolute inset-0 flex items-center justify-center">

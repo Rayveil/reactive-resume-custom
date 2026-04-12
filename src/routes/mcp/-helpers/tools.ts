@@ -4,6 +4,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import z from "zod";
 
 import { client } from "@/integrations/orpc/client";
+import { resumeDataSchema } from "@/schema/resume/data";
 import { jsonPatchOperationSchema } from "@/utils/resume/patch";
 
 type PatchOperation = z.infer<typeof jsonPatchOperationSchema>;
@@ -142,6 +143,7 @@ export function registerTools(server: McpServer) {
         "",
         "Returns the ID of the newly created resume.",
         "Set `withSampleData` to true to pre-fill with example content (useful for testing).",
+        "Optionally pass `data` to create from pre-filled resume content (for example, saved personal details).",
         "After creating, use `get_resume` to view or `patch_resume` to populate it.",
       ].join("\n"),
       inputSchema: z.object({
@@ -157,6 +159,7 @@ export function registerTools(server: McpServer) {
           .default([])
           .describe("Tags to categorize the resume (e.g. ['tech', 'senior'])"),
         withSampleData: z.boolean().optional().default(false).describe("Pre-fill with sample data. Default: false."),
+        data: resumeDataSchema.optional().describe("Optional pre-filled resume data to initialize this resume."),
       }),
       annotations: {
         readOnlyHint: false,
@@ -172,16 +175,18 @@ export function registerTools(server: McpServer) {
         slug,
         tags,
         withSampleData,
+        data,
       }: {
         name: string;
         slug: string;
         tags: string[];
         withSampleData: boolean;
+        data?: z.infer<typeof resumeDataSchema>;
       }) => {
-        const id = await client.resume.create({ name, slug, tags, withSampleData });
+        const id = await client.resume.create({ name, slug, tags, withSampleData, data });
 
         return text(
-          `Created resume "${name}" (ID: ${id}) with slug "${slug}".${withSampleData ? " Pre-filled with sample data." : ""}\n\nNext steps: Use \`get_resume\` to view it, or \`patch_resume\` to start editing.`,
+          `Created resume "${name}" (ID: ${id}) with slug "${slug}".${withSampleData ? " Pre-filled with sample data." : ""}${data ? " Initialized with provided resume data." : ""}\n\nNext steps: Use \`get_resume\` to view it, or \`patch_resume\` to start editing.`,
         );
       },
     ),
