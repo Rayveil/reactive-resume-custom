@@ -51,6 +51,11 @@ const appSidebarItems = [
   },
   {
     icon: <BriefcaseIcon />,
+    label: msg`Work`,
+    href: "/dashboard/work",
+  },
+  {
+    icon: <BriefcaseIcon />,
     label: msg`Job Search`,
     href: "/dashboard/job-search",
   },

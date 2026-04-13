@@ -1,6 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import {
+  BriefcaseIcon,
   GearIcon,
   HouseSimpleIcon,
   KeyIcon,
@@ -44,6 +45,16 @@ export function NavigationCommandGroup() {
         >
           <ReadCvLogoIcon />
           <Trans>Resumes</Trans>
+        </CommandItem>
+
+        <CommandItem
+          disabled={!session}
+          keywords={[t`Work`]}
+          value="navigation.work"
+          onSelect={() => onNavigate("/dashboard/work")}
+        >
+          <BriefcaseIcon />
+          <Trans>Work</Trans>
         </CommandItem>
 
         <CommandItem
