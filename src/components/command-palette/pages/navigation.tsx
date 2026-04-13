@@ -49,6 +49,16 @@ export function NavigationCommandGroup() {
 
         <CommandItem
           disabled={!session}
+          keywords={[t`Jobs`]}
+          value="navigation.jobs"
+          onSelect={() => onNavigate("/dashboard/jobs")}
+        >
+          <BriefcaseIcon />
+          <Trans>Jobs</Trans>
+        </CommandItem>
+
+        <CommandItem
+          disabled={!session}
           keywords={[t`Work`]}
           value="navigation.work"
           onSelect={() => onNavigate("/dashboard/work")}
