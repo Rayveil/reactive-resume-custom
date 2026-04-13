@@ -67,7 +67,7 @@ services:
       "
     depends_on:
       seaweedfs:
-        condition: service_healthy
+        condition: service_started
 
   reactive_resume:
     build: .
