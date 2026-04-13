@@ -74,75 +74,73 @@ function RouteComponent() {
     <div className="space-y-6">
       <DashboardHeader icon={ReadCvLogoIcon} title={t`Resumes`} />
 
-      <section className="relative overflow-hidden rounded-3xl border bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(30,41,59,0.95),rgba(51,65,85,0.96))] p-6 text-white shadow-sm">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.14),transparent_40%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_32%)]" />
-        <div className="relative grid gap-6 lg:grid-cols-[1.25fr_1fr] lg:items-center">
+      <section className="rounded-md border bg-popover p-6 shadow-sm">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)] lg:items-start">
           <div className="space-y-4">
-            <p className="text-xs uppercase tracking-[0.35em] text-white/60">Resume studio</p>
-            <h1 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
-              <Trans>Import a resume, type your details once, and reuse them for every new version.</Trans>
+            <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
+              <Trans>Resumes</Trans>
+            </p>
+            <h1 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              <Trans>Create a new resume</Trans>
             </h1>
-            <p className="max-w-2xl text-sm leading-6 text-white/70 sm:text-base">
-              <Trans>
-                Start from an existing PDF, Word document, or JSON file, or enter your personal information manually
-                to create a reusable resume foundation.
-              </Trans>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+              <Trans>Start building your resume from scratch</Trans>
             </p>
 
             <div className="flex flex-wrap gap-3">
               <Button
-                className="h-11 rounded-full bg-white px-5 text-slate-950 hover:bg-white/90"
+                className="h-11 rounded-full px-5"
                 onClick={() => openDialog("resume.import", undefined)}
               >
                 <UploadSimpleIcon />
-                <Trans>Import resume</Trans>
+                <Trans>Import an existing resume</Trans>
               </Button>
 
               <Button
                 variant="outline"
-                className="h-11 rounded-full border-white/20 bg-white/10 px-5 text-white hover:bg-white/20"
+                className="h-11 rounded-full px-5"
                 onClick={() => openDialog("resume.create", undefined)}
               >
                 <PencilSimpleLineIcon />
-                <Trans>Enter personal details</Trans>
+                <Trans>Create a new resume</Trans>
               </Button>
 
               <Button
                 variant="ghost"
-                className="h-11 rounded-full px-5 text-white hover:bg-white/20 hover:text-white"
+                className="h-11 rounded-full px-5"
                 onClick={() => void navigate({ to: "/dashboard/settings/profile" })}
               >
                 <UserCircleIcon />
-                <Trans>Update account profile</Trans>
+                <Trans>Profile</Trans>
               </Button>
             </div>
           </div>
 
-          <div className="grid gap-3 rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
-            <div className="rounded-xl border border-white/15 bg-black/10 p-4">
-              <p className="text-sm font-medium text-white">
-                <Trans>1. Import or type your profile</Trans>
+          <div className="grid gap-3 rounded-md border bg-background p-4 shadow-xs">
+            <div className="rounded-md border bg-background p-4">
+              <p className="text-sm font-medium text-foreground">
+                <Trans>Import an existing resume</Trans>
               </p>
-              <p className="mt-1 text-sm text-white/70">
-                <Trans>Save your name, headline, contact details, and website in the new resume.</Trans>
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-white/15 bg-black/10 p-4">
-              <p className="text-sm font-medium text-white">
-                <Trans>2. Pick a template</Trans>
-              </p>
-              <p className="mt-1 text-sm text-white/70">
-                <Trans>Choose a layout that fits the role before you start refining sections.</Trans>
+              <p className="mt-1 text-sm text-muted-foreground">
+                <Trans>Continue where you left off</Trans>
               </p>
             </div>
 
-            <div className="rounded-xl border border-white/15 bg-black/10 p-4">
-              <p className="text-sm font-medium text-white">
-                <Trans>3. Reuse the result</Trans>
+            <div className="rounded-md border bg-background p-4">
+              <p className="text-sm font-medium text-foreground">
+                <Trans>Create a new resume</Trans>
               </p>
-              <p className="mt-1 text-sm text-white/70">
-                <Trans>Duplicate, tailor, or export the resume whenever you need a new version.</Trans>
+              <p className="mt-1 text-sm text-muted-foreground">
+                <Trans>Start building your resume from scratch</Trans>
+              </p>
+            </div>
+
+            <div className="rounded-md border bg-background p-4">
+              <p className="text-sm font-medium text-foreground">
+                <Trans>Sort by</Trans>
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                <Trans>Last Updated</Trans>
               </p>
             </div>
           </div>

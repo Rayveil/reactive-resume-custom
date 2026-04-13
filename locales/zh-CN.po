@@ -33,6 +33,63 @@ msgstr "创建时间"
 msgid "Name"
 msgstr "姓名"
 
+#: src/routes/dashboard/resumes/index.tsx
+msgid "Resume studio"
+msgstr "简历工作台"
+
+#: src/routes/dashboard/resumes/index.tsx
+msgid "Import a resume, type your details once, and reuse them for every new version."
+msgstr "导入已有简历或一次填写个人信息，即可在每个新版本中复用。"
+
+#: src/routes/dashboard/resumes/index.tsx
+msgid "Start from an existing PDF, Word document, or JSON file, or enter your personal information manually to create a reusable resume foundation."
+msgstr "你可以从已有 PDF、Word 或 JSON 文件开始，也可以手动输入个人信息，创建可复用的简历基础。"
+
+#: src/routes/dashboard/resumes/index.tsx
+msgid "Import resume"
+msgstr "导入简历"
+
+#: src/routes/dashboard/resumes/index.tsx
+msgid "Enter personal details"
+msgstr "填写个人信息"
+
+#: src/routes/dashboard/resumes/index.tsx
+msgid "Update account profile"
+msgstr "更新账号资料"
+
+#: src/routes/dashboard/resumes/index.tsx
+msgid "1. Import or type your profile"
+msgstr "1. 导入或填写个人信息"
+
+#: src/routes/dashboard/resumes/index.tsx
+msgid "Save your name, headline, contact details, and website in the new resume."
+msgstr "将你的姓名、标题、联系方式和网站保存到新简历中。"
+
+#: src/routes/dashboard/resumes/index.tsx
+msgid "2. Pick a template"
+msgstr "2. 选择模板"
+
+#: src/routes/dashboard/resumes/index.tsx
+msgid "Choose a layout that fits the role before you start refining sections."
+msgstr "在开始细化内容前，先选择适合目标岗位的版式。"
+
+#: src/routes/dashboard/resumes/index.tsx
+msgid "3. Reuse the result"
+msgstr "3. 复用成果"
+
+#: src/routes/dashboard/resumes/index.tsx
+msgid "Duplicate, tailor, or export the resume whenever you need a new version."
+msgstr "需要新版本时，可随时复制、定制或导出简历。"
+
+#: src/components/command-palette/pages/resumes.tsx
+#: src/routes/dashboard/resumes/-components/cards/create-card.tsx
+msgid "Create resume with details"
+msgstr "填写信息创建简历"
+
+#: src/routes/dashboard/resumes/-components/cards/create-card.tsx
+msgid "Save your personal information and start editing"
+msgstr "保存个人信息并开始编辑"
+
 #: src/routes/_home/-sections/hero.tsx
 msgid "(opens in new tab)"
 msgstr "（在新标签页中打开）"
