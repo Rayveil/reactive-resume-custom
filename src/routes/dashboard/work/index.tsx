@@ -17,20 +17,20 @@ import { client, orpc, type RouterOutput } from "@/integrations/orpc/client";
 
 import { DashboardHeader } from "../-components/header";
 
-export const Route = createFileRoute("/dashboard/work/")({
-  component: RouteComponent,
-  validateSearch: zodValidator(searchSchema),
-  search: {
-    middlewares: [stripSearchParams({ status: "all" })],
-  },
-});
-
 type Resume = RouterOutput["resume"]["list"][number];
 type WorkStatus = "draft" | "saved" | "applied" | "interview" | "offer" | "rejected";
 type WorkStatusFilter = WorkStatus | "all";
 
 const searchSchema = z.object({
   status: z.enum(["all", "draft", "saved", "applied", "interview", "offer", "rejected"]).default("all"),
+});
+
+export const Route = createFileRoute("/dashboard/work/")({
+  component: RouteComponent,
+  validateSearch: zodValidator(searchSchema),
+  search: {
+    middlewares: [stripSearchParams({ status: "all" })],
+  },
 });
 
 type WorkEntry = {
