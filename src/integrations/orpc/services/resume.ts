@@ -21,15 +21,23 @@ import { getStorageService } from "./storage";
 
 const tags = {
   list: async (input: { userId: string }) => {
-    const result = await db
-      .select({ tags: schema.resume.tags })
-      .from(schema.resume)
-      .where(eq(schema.resume.userId, input.userId));
+    try {
+      const result = await db
+        .select({ tags: schema.resume.tags })
+        .from(schema.resume)
+        .where(eq(schema.resume.userId, input.userId));
 
-    const uniqueTags = new Set(result.flatMap((tag) => tag.tags));
-    const sortedTags = Array.from(uniqueTags).sort((a, b) => a.localeCompare(b));
+      const uniqueTags = new Set(result.flatMap((tag) => tag.tags));
+      const sortedTags = Array.from(uniqueTags).sort((a, b) => a.localeCompare(b));
 
-    return sortedTags;
+      return sortedTags;
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("⚠️  tags.list failed in development (database unavailable), returning empty array");
+        return [];
+      }
+      throw error;
+    }
   },
 };
 
@@ -88,33 +96,41 @@ export const resumeService = {
   statistics,
 
   list: async (input: { userId: string; tags: string[]; sort: "lastUpdatedAt" | "createdAt" | "name" }) => {
-    return await db
-      .select({
-        id: schema.resume.id,
-        name: schema.resume.name,
-        slug: schema.resume.slug,
-        tags: schema.resume.tags,
-        isPublic: schema.resume.isPublic,
-        isLocked: schema.resume.isLocked,
-        createdAt: schema.resume.createdAt,
-        updatedAt: schema.resume.updatedAt,
-      })
-      .from(schema.resume)
-      .where(
-        and(
-          eq(schema.resume.userId, input.userId),
-          match(input.tags.length)
-            .with(0, () => undefined)
-            .otherwise(() => arrayContains(schema.resume.tags, input.tags)),
-        ),
-      )
-      .orderBy(
-        match(input.sort)
-          .with("lastUpdatedAt", () => desc(schema.resume.updatedAt))
-          .with("createdAt", () => asc(schema.resume.createdAt))
-          .with("name", () => asc(schema.resume.name))
-          .exhaustive(),
-      );
+    try {
+      return await db
+        .select({
+          id: schema.resume.id,
+          name: schema.resume.name,
+          slug: schema.resume.slug,
+          tags: schema.resume.tags,
+          isPublic: schema.resume.isPublic,
+          isLocked: schema.resume.isLocked,
+          createdAt: schema.resume.createdAt,
+          updatedAt: schema.resume.updatedAt,
+        })
+        .from(schema.resume)
+        .where(
+          and(
+            eq(schema.resume.userId, input.userId),
+            match(input.tags.length)
+              .with(0, () => undefined)
+              .otherwise(() => arrayContains(schema.resume.tags, input.tags)),
+          ),
+        )
+        .orderBy(
+          match(input.sort)
+            .with("lastUpdatedAt", () => desc(schema.resume.updatedAt))
+            .with("createdAt", () => asc(schema.resume.createdAt))
+            .with("name", () => asc(schema.resume.name))
+            .exhaustive(),
+        );
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("⚠️  resume.list failed in development (database unavailable), returning empty array");
+        return [];
+      }
+      throw error;
+    }
   },
 
   getById: async (input: { id: string; userId: string }) => {

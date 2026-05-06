@@ -22,7 +22,7 @@ export function ProjectsSectionBuilder() {
   };
 
   const buildSubtitle = (item: z.infer<typeof projectItemSchema>) => {
-    const parts = [item.period, item.website.label].filter((part) => part && part.trim().length > 0);
+    const parts = [item.period, item.website?.label ?? ""].filter((part) => part && part.trim().length > 0);
     return parts.length > 0 ? parts.join(" • ") : undefined;
   };
 

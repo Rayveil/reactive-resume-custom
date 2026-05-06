@@ -27,8 +27,12 @@ import { Route as AuthLoginRouteImport } from "./routes/auth/login";
 import { Route as AuthForgotPasswordRouteImport } from "./routes/auth/forgot-password";
 import { Route as ApiHealthRouteImport } from "./routes/api/health";
 import { Route as UsernameSlugRouteImport } from "./routes/$username/$slug";
+import { Route as DashboardWebpageRouteRouteImport } from "./routes/dashboard/webpage/route";
 import { Route as BuilderResumeIdRouteRouteImport } from "./routes/builder/$resumeId/route";
+import { Route as DashboardWorkIndexRouteImport } from "./routes/dashboard/work/index";
 import { Route as DashboardResumesIndexRouteImport } from "./routes/dashboard/resumes/index";
+import { Route as DashboardPersonalIndexRouteImport } from "./routes/dashboard/personal/index";
+import { Route as DashboardJobsIndexRouteImport } from "./routes/dashboard/jobs/index";
 import { Route as DashboardJobSearchIndexRouteImport } from "./routes/dashboard/job-search/index";
 import { Route as BuilderResumeIdIndexRouteImport } from "./routes/builder/$resumeId/index";
 import { Route as UploadsUserIdSplatRouteImport } from "./routes/uploads/$userId.$";
@@ -132,14 +136,34 @@ const UsernameSlugRoute = UsernameSlugRouteImport.update({
   path: "/$username/$slug",
   getParentRoute: () => rootRouteImport,
 } as any);
+const DashboardWebpageRouteRoute = DashboardWebpageRouteRouteImport.update({
+  id: "/webpage",
+  path: "/webpage",
+  getParentRoute: () => DashboardRouteRoute,
+} as any);
 const BuilderResumeIdRouteRoute = BuilderResumeIdRouteRouteImport.update({
   id: "/builder/$resumeId",
   path: "/builder/$resumeId",
   getParentRoute: () => rootRouteImport,
 } as any);
+const DashboardWorkIndexRoute = DashboardWorkIndexRouteImport.update({
+  id: "/work/",
+  path: "/work/",
+  getParentRoute: () => DashboardRouteRoute,
+} as any);
 const DashboardResumesIndexRoute = DashboardResumesIndexRouteImport.update({
   id: "/resumes/",
   path: "/resumes/",
+  getParentRoute: () => DashboardRouteRoute,
+} as any);
+const DashboardPersonalIndexRoute = DashboardPersonalIndexRouteImport.update({
+  id: "/personal/",
+  path: "/personal/",
+  getParentRoute: () => DashboardRouteRoute,
+} as any);
+const DashboardJobsIndexRoute = DashboardJobsIndexRouteImport.update({
+  id: "/jobs/",
+  path: "/jobs/",
   getParentRoute: () => DashboardRouteRoute,
 } as any);
 const DashboardJobSearchIndexRoute = DashboardJobSearchIndexRouteImport.update({
@@ -220,6 +244,7 @@ export interface FileRoutesByFullPath {
   "/dashboard": typeof DashboardRouteRouteWithChildren;
   "/schema.json": typeof SchemaDotjsonRoute;
   "/builder/$resumeId": typeof BuilderResumeIdRouteRouteWithChildren;
+  "/dashboard/webpage": typeof DashboardWebpageRouteRoute;
   "/$username/$slug": typeof UsernameSlugRoute;
   "/api/health": typeof ApiHealthRoute;
   "/auth/forgot-password": typeof AuthForgotPasswordRoute;
@@ -245,11 +270,15 @@ export interface FileRoutesByFullPath {
   "/uploads/$userId/$": typeof UploadsUserIdSplatRoute;
   "/builder/$resumeId/": typeof BuilderResumeIdIndexRoute;
   "/dashboard/job-search/": typeof DashboardJobSearchIndexRoute;
+  "/dashboard/jobs/": typeof DashboardJobsIndexRoute;
+  "/dashboard/personal/": typeof DashboardPersonalIndexRoute;
   "/dashboard/resumes/": typeof DashboardResumesIndexRoute;
+  "/dashboard/work/": typeof DashboardWorkIndexRoute;
   "/dashboard/settings/authentication/": typeof DashboardSettingsAuthenticationIndexRoute;
 }
 export interface FileRoutesByTo {
   "/schema.json": typeof SchemaDotjsonRoute;
+  "/dashboard/webpage": typeof DashboardWebpageRouteRoute;
   "/$username/$slug": typeof UsernameSlugRoute;
   "/api/health": typeof ApiHealthRoute;
   "/auth/forgot-password": typeof AuthForgotPasswordRoute;
@@ -276,7 +305,10 @@ export interface FileRoutesByTo {
   "/uploads/$userId/$": typeof UploadsUserIdSplatRoute;
   "/builder/$resumeId": typeof BuilderResumeIdIndexRoute;
   "/dashboard/job-search": typeof DashboardJobSearchIndexRoute;
+  "/dashboard/jobs": typeof DashboardJobsIndexRoute;
+  "/dashboard/personal": typeof DashboardPersonalIndexRoute;
   "/dashboard/resumes": typeof DashboardResumesIndexRoute;
+  "/dashboard/work": typeof DashboardWorkIndexRoute;
   "/dashboard/settings/authentication": typeof DashboardSettingsAuthenticationIndexRoute;
 }
 export interface FileRoutesById {
@@ -286,6 +318,7 @@ export interface FileRoutesById {
   "/dashboard": typeof DashboardRouteRouteWithChildren;
   "/schema.json": typeof SchemaDotjsonRoute;
   "/builder/$resumeId": typeof BuilderResumeIdRouteRouteWithChildren;
+  "/dashboard/webpage": typeof DashboardWebpageRouteRoute;
   "/$username/$slug": typeof UsernameSlugRoute;
   "/api/health": typeof ApiHealthRoute;
   "/auth/forgot-password": typeof AuthForgotPasswordRoute;
@@ -312,7 +345,10 @@ export interface FileRoutesById {
   "/uploads/$userId/$": typeof UploadsUserIdSplatRoute;
   "/builder/$resumeId/": typeof BuilderResumeIdIndexRoute;
   "/dashboard/job-search/": typeof DashboardJobSearchIndexRoute;
+  "/dashboard/jobs/": typeof DashboardJobsIndexRoute;
+  "/dashboard/personal/": typeof DashboardPersonalIndexRoute;
   "/dashboard/resumes/": typeof DashboardResumesIndexRoute;
+  "/dashboard/work/": typeof DashboardWorkIndexRoute;
   "/dashboard/settings/authentication/": typeof DashboardSettingsAuthenticationIndexRoute;
 }
 export interface FileRouteTypes {
@@ -323,6 +359,7 @@ export interface FileRouteTypes {
     | "/dashboard"
     | "/schema.json"
     | "/builder/$resumeId"
+    | "/dashboard/webpage"
     | "/$username/$slug"
     | "/api/health"
     | "/auth/forgot-password"
@@ -348,11 +385,15 @@ export interface FileRouteTypes {
     | "/uploads/$userId/$"
     | "/builder/$resumeId/"
     | "/dashboard/job-search/"
+    | "/dashboard/jobs/"
+    | "/dashboard/personal/"
     | "/dashboard/resumes/"
+    | "/dashboard/work/"
     | "/dashboard/settings/authentication/";
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/schema.json"
+    | "/dashboard/webpage"
     | "/$username/$slug"
     | "/api/health"
     | "/auth/forgot-password"
@@ -379,7 +420,10 @@ export interface FileRouteTypes {
     | "/uploads/$userId/$"
     | "/builder/$resumeId"
     | "/dashboard/job-search"
+    | "/dashboard/jobs"
+    | "/dashboard/personal"
     | "/dashboard/resumes"
+    | "/dashboard/work"
     | "/dashboard/settings/authentication";
   id:
     | "__root__"
@@ -388,6 +432,7 @@ export interface FileRouteTypes {
     | "/dashboard"
     | "/schema.json"
     | "/builder/$resumeId"
+    | "/dashboard/webpage"
     | "/$username/$slug"
     | "/api/health"
     | "/auth/forgot-password"
@@ -414,7 +459,10 @@ export interface FileRouteTypes {
     | "/uploads/$userId/$"
     | "/builder/$resumeId/"
     | "/dashboard/job-search/"
+    | "/dashboard/jobs/"
+    | "/dashboard/personal/"
     | "/dashboard/resumes/"
+    | "/dashboard/work/"
     | "/dashboard/settings/authentication/";
   fileRoutesById: FileRoutesById;
 }
@@ -562,6 +610,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof UsernameSlugRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/dashboard/webpage": {
+      id: "/dashboard/webpage";
+      path: "/webpage";
+      fullPath: "/dashboard/webpage";
+      preLoaderRoute: typeof DashboardWebpageRouteRouteImport;
+      parentRoute: typeof DashboardRouteRoute;
+    };
     "/builder/$resumeId": {
       id: "/builder/$resumeId";
       path: "/builder/$resumeId";
@@ -569,11 +624,32 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof BuilderResumeIdRouteRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/dashboard/work/": {
+      id: "/dashboard/work/";
+      path: "/work";
+      fullPath: "/dashboard/work/";
+      preLoaderRoute: typeof DashboardWorkIndexRouteImport;
+      parentRoute: typeof DashboardRouteRoute;
+    };
     "/dashboard/resumes/": {
       id: "/dashboard/resumes/";
       path: "/resumes";
       fullPath: "/dashboard/resumes/";
       preLoaderRoute: typeof DashboardResumesIndexRouteImport;
+      parentRoute: typeof DashboardRouteRoute;
+    };
+    "/dashboard/personal/": {
+      id: "/dashboard/personal/";
+      path: "/personal";
+      fullPath: "/dashboard/personal/";
+      preLoaderRoute: typeof DashboardPersonalIndexRouteImport;
+      parentRoute: typeof DashboardRouteRoute;
+    };
+    "/dashboard/jobs/": {
+      id: "/dashboard/jobs/";
+      path: "/jobs";
+      fullPath: "/dashboard/jobs/";
+      preLoaderRoute: typeof DashboardJobsIndexRouteImport;
       parentRoute: typeof DashboardRouteRoute;
     };
     "/dashboard/job-search/": {
@@ -709,6 +785,7 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 );
 
 interface DashboardRouteRouteChildren {
+  DashboardWebpageRouteRoute: typeof DashboardWebpageRouteRoute;
   DashboardIndexRoute: typeof DashboardIndexRoute;
   DashboardSettingsAiRoute: typeof DashboardSettingsAiRoute;
   DashboardSettingsApiKeysRoute: typeof DashboardSettingsApiKeysRoute;
@@ -717,11 +794,15 @@ interface DashboardRouteRouteChildren {
   DashboardSettingsPreferencesRoute: typeof DashboardSettingsPreferencesRoute;
   DashboardSettingsProfileRoute: typeof DashboardSettingsProfileRoute;
   DashboardJobSearchIndexRoute: typeof DashboardJobSearchIndexRoute;
+  DashboardJobsIndexRoute: typeof DashboardJobsIndexRoute;
+  DashboardPersonalIndexRoute: typeof DashboardPersonalIndexRoute;
   DashboardResumesIndexRoute: typeof DashboardResumesIndexRoute;
+  DashboardWorkIndexRoute: typeof DashboardWorkIndexRoute;
   DashboardSettingsAuthenticationIndexRoute: typeof DashboardSettingsAuthenticationIndexRoute;
 }
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
+  DashboardWebpageRouteRoute: DashboardWebpageRouteRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardSettingsAiRoute: DashboardSettingsAiRoute,
   DashboardSettingsApiKeysRoute: DashboardSettingsApiKeysRoute,
@@ -730,7 +811,10 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardSettingsPreferencesRoute: DashboardSettingsPreferencesRoute,
   DashboardSettingsProfileRoute: DashboardSettingsProfileRoute,
   DashboardJobSearchIndexRoute: DashboardJobSearchIndexRoute,
+  DashboardJobsIndexRoute: DashboardJobsIndexRoute,
+  DashboardPersonalIndexRoute: DashboardPersonalIndexRoute,
   DashboardResumesIndexRoute: DashboardResumesIndexRoute,
+  DashboardWorkIndexRoute: DashboardWorkIndexRoute,
   DashboardSettingsAuthenticationIndexRoute:
     DashboardSettingsAuthenticationIndexRoute,
 };

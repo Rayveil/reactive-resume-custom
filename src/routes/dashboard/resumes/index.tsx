@@ -1,26 +1,50 @@
 import { t } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react";
 import { Trans } from "@lingui/react/macro";
-import { GridFourIcon, ListIcon, PencilSimpleLineIcon, ReadCvLogoIcon, UploadSimpleIcon, UserCircleIcon } from "@phosphor-icons/react";
+import {
+  CheckCircleIcon,
+  GlobeIcon,
+  GridFourIcon,
+  ListIcon,
+  PencilSimpleLineIcon,
+  ReadCvLogoIcon,
+  UploadSimpleIcon,
+  UserCircleIcon,
+} from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, stripSearchParams, useNavigate, useRouter } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
-import { getCookie, setCookie } from "@tanstack/react-start/server";
+import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import z from "zod";
 
-import { Combobox } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useDialogStore } from "@/dialogs/store";
 import { orpc } from "@/integrations/orpc/client";
 import { cn } from "@/utils/style";
 
 import { DashboardHeader } from "../-components/header";
+import {
+  createMockProfileSource,
+  mergeProfileSource,
+  profileSourceStorageKey,
+  type ProfileSourceData,
+  type ProfileProject,
+} from "../personal/-components/profile-source";
 import { GridView } from "./-components/grid-view";
 import { ListView } from "./-components/list-view";
-import { useDialogStore } from "@/dialogs/store";
 
 type SortOption = "lastUpdatedAt" | "createdAt" | "name";
 
@@ -35,22 +59,45 @@ export const Route = createFileRoute("/dashboard/resumes/")({
   search: {
     middlewares: [stripSearchParams({ tags: [], sort: "lastUpdatedAt" })],
   },
-  loader: async () => {
-    const view = await getViewServerFn();
-    return { view };
-  },
 });
 
 function RouteComponent() {
-  const router = useRouter();
   const { i18n } = useLingui();
-  const { view } = Route.useLoaderData();
   const { tags, sort } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const { openDialog } = useDialogStore();
+  const [view, setView] = useState<"grid" | "list">(() => getInitialResumesView());
 
   const { data: allTags } = useQuery(orpc.resume.tags.list.queryOptions());
   const { data: resumes } = useQuery(orpc.resume.list.queryOptions({ input: { tags, sort } }));
+
+  const [profileSkills, setProfileSkills] = useState<Array<{ id: string; name: string }>>([]);
+  const [profileProjects, setProfileProjects] = useState<ProfileProject[]>([]);
+  const [resumeSkills, setResumeSkills] = useState<string[]>([]);
+  const [resumeProjects, setResumeProjects] = useState<ProfileProject[]>([]);
+  const [openSkillImport, setOpenSkillImport] = useState(false);
+  const [openProjectImport, setOpenProjectImport] = useState(false);
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const [syncToProfile, setSyncToProfile] = useState(false);
+
+  const profileSource = useMemo(() => {
+    if (typeof window === "undefined") return createMockProfileSource();
+
+    const raw = window.localStorage.getItem(profileSourceStorageKey);
+    if (!raw) return createMockProfileSource();
+
+    try {
+      return mergeProfileSource(JSON.parse(raw) as Partial<ProfileSourceData>);
+    } catch {
+      return createMockProfileSource();
+    }
+  }, []);
+
+  useEffect(() => {
+    setProfileSkills(profileSource.skills);
+    setProfileProjects(profileSource.projects);
+  }, [profileSource]);
 
   const tagOptions = useMemo(() => {
     if (!allTags) return [];
@@ -65,9 +112,79 @@ function RouteComponent() {
     ];
   }, [i18n]);
 
-  const onViewChange = async (value: string) => {
-    await setViewServerFn({ data: value as "grid" | "list" });
-    void router.invalidate();
+  const onViewChange = (value: string) => {
+    const nextView = value as "grid" | "list";
+    setView(nextView);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(RESUMES_VIEW_STORAGE_KEY, nextView);
+    }
+  };
+
+  const importSkillsFromProfile = () => {
+    const selected = profileSkills.filter((skill) => selectedSkillIds.includes(skill.id));
+    setResumeSkills((prev) => {
+      const unique = new Set(prev);
+      for (const skill of selected) unique.add(skill.name);
+      return Array.from(unique);
+    });
+
+    setOpenSkillImport(false);
+    setSelectedSkillIds([]);
+    toast.success(t`Skills imported from Profile.`);
+  };
+
+  const importProjectsFromProfile = () => {
+    const selected = profileProjects.filter((project) => selectedProjectIds.includes(project.id));
+    setResumeProjects((prev) => {
+      const exists = new Set(prev.map((project) => project.id));
+      const merged = [...prev];
+      for (const project of selected) {
+        if (!exists.has(project.id)) merged.push(project);
+      }
+      return merged;
+    });
+
+    setOpenProjectImport(false);
+    setSelectedProjectIds([]);
+    toast.success(t`Projects imported from Profile.`);
+  };
+
+  const saveResumeDraft = () => {
+    if (!syncToProfile) {
+      toast.success(t`Resume draft saved (mock).`);
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      const raw = window.localStorage.getItem(profileSourceStorageKey);
+      const profile = raw ? (JSON.parse(raw) as ReturnType<typeof createMockProfileSource>) : createMockProfileSource();
+
+      const mergedSkills = Array.from(new Set([...profile.skills.map((skill) => skill.name), ...resumeSkills])).map(
+        (name, index) => ({
+          id: profile.skills[index]?.id ?? `sync-skill-${Date.now()}-${index}`,
+          name,
+        }),
+      );
+
+      const mergedProjects = [...profile.projects];
+      const existingProjectIds = new Set(mergedProjects.map((project) => project.id));
+      for (const project of resumeProjects) {
+        if (!existingProjectIds.has(project.id)) {
+          mergedProjects.push(project);
+        }
+      }
+
+      window.localStorage.setItem(
+        profileSourceStorageKey,
+        JSON.stringify({
+          ...profile,
+          skills: mergedSkills,
+          projects: mergedProjects,
+        }),
+      );
+    }
+
+    toast.success(t`Resume draft saved and synchronized to Profile.`);
   };
 
   return (
@@ -77,7 +194,7 @@ function RouteComponent() {
       <section className="rounded-md border bg-popover p-6 shadow-sm">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)] lg:items-start">
           <div className="space-y-4">
-            <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
+            <p className="text-xs tracking-[0.35em] text-muted-foreground uppercase">
               <Trans>Resumes</Trans>
             </p>
             <h1 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
@@ -88,10 +205,7 @@ function RouteComponent() {
             </p>
 
             <div className="flex flex-wrap gap-3">
-              <Button
-                className="h-11 rounded-full px-5"
-                onClick={() => openDialog("resume.import", undefined)}
-              >
+              <Button className="h-11 rounded-full px-5" onClick={() => openDialog("resume.import", undefined)}>
                 <UploadSimpleIcon />
                 <Trans>Import an existing resume</Trans>
               </Button>
@@ -108,42 +222,69 @@ function RouteComponent() {
               <Button
                 variant="ghost"
                 className="h-11 rounded-full px-5"
-                onClick={() => void navigate({ to: "/dashboard/settings/profile" })}
+                onClick={() => void navigate({ to: "/dashboard/personal" })}
               >
                 <UserCircleIcon />
                 <Trans>Profile</Trans>
               </Button>
+
+              <Button
+                variant="outline"
+                className="h-11 rounded-full px-5"
+                onClick={() => void navigate({ to: "/dashboard/webpage" })}
+              >
+                <GlobeIcon />
+                <Trans>Generate Webpage</Trans>
+              </Button>
             </div>
           </div>
+        </div>
+      </section>
 
-          <div className="grid gap-3 rounded-md border bg-background p-4 shadow-xs">
-            <div className="rounded-md border bg-background p-4">
-              <p className="text-sm font-medium text-foreground">
-                <Trans>Import an existing resume</Trans>
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                <Trans>Continue where you left off</Trans>
-              </p>
-            </div>
-
-            <div className="rounded-md border bg-background p-4">
-              <p className="text-sm font-medium text-foreground">
-                <Trans>Create a new resume</Trans>
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                <Trans>Start building your resume from scratch</Trans>
-              </p>
-            </div>
-
-            <div className="rounded-md border bg-background p-4">
-              <p className="text-sm font-medium text-foreground">
-                <Trans>Sort by</Trans>
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                <Trans>Last Updated</Trans>
-              </p>
-            </div>
+      <section className="space-y-4 rounded-xl border bg-background p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs tracking-[0.3em] text-muted-foreground uppercase">
+              <Trans>Manual Mode Mirror</Trans>
+            </p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight">
+              <Trans>Section order from the builder</Trans>
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              <Trans>
+                Render the resume in the same section order as the manual editor, with each module collapsed by default.
+              </Trans>
+            </p>
           </div>
+        </div>
+
+        <div className="rounded-xl border bg-card p-4 shadow-sm">
+          <p className="text-sm text-muted-foreground">
+            The full editable section order now lives on Profile Info, where you can add and modify the content.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3"
+            onClick={() => void navigate({ to: "/dashboard/personal" })}
+          >
+            <UserCircleIcon />
+            <Trans>Open Profile Info</Trans>
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed p-4">
+          <div className="flex items-center gap-3">
+            <Switch checked={syncToProfile} onCheckedChange={setSyncToProfile} />
+            <p className="text-sm">
+              <Trans>Sync back to Profile when saving this resume</Trans>
+            </p>
+          </div>
+
+          <Button type="button" className="rounded-full px-5" onClick={saveResumeDraft}>
+            <CheckCircleIcon />
+            <Trans>Save Resume</Trans>
+          </Button>
         </div>
       </section>
 
@@ -187,22 +328,108 @@ function RouteComponent() {
       </div>
 
       {view === "list" ? <ListView resumes={resumes ?? []} /> : <GridView resumes={resumes ?? []} />}
+
+      <Dialog open={openSkillImport} onOpenChange={setOpenSkillImport}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              <Trans>Import Skills from Profile</Trans>
+            </DialogTitle>
+            <DialogDescription>
+              <Trans>Select the skills you want to reuse in this resume draft.</Trans>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            {profileSkills.map((skill) => {
+              const checked = selectedSkillIds.includes(skill.id);
+              return (
+                <label
+                  key={skill.id}
+                  className="flex cursor-pointer items-center justify-between rounded-lg border bg-background px-3 py-2"
+                >
+                  <span className="text-sm">{skill.name}</span>
+                  <Switch
+                    checked={checked}
+                    onCheckedChange={(nextChecked) => {
+                      setSelectedSkillIds((prev) => {
+                        if (nextChecked) return [...prev, skill.id];
+                        return prev.filter((id) => id !== skill.id);
+                      });
+                    }}
+                  />
+                </label>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenSkillImport(false)}>
+              <Trans>Cancel</Trans>
+            </Button>
+            <Button onClick={importSkillsFromProfile}>
+              <Trans>Import</Trans>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openProjectImport} onOpenChange={setOpenProjectImport}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              <Trans>Import Projects from Profile</Trans>
+            </DialogTitle>
+            <DialogDescription>
+              <Trans>Select projects to import as reusable resume cards.</Trans>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            {profileProjects.map((project) => {
+              const checked = selectedProjectIds.includes(project.id);
+              return (
+                <label
+                  key={project.id}
+                  className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border bg-background px-3 py-2"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{project.name}</p>
+                    <p className="text-xs text-muted-foreground">{project.description}</p>
+                  </div>
+                  <Switch
+                    checked={checked}
+                    onCheckedChange={(nextChecked) => {
+                      setSelectedProjectIds((prev) => {
+                        if (nextChecked) return [...prev, project.id];
+                        return prev.filter((id) => id !== project.id);
+                      });
+                    }}
+                  />
+                </label>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenProjectImport(false)}>
+              <Trans>Cancel</Trans>
+            </Button>
+            <Button onClick={importProjectsFromProfile}>
+              <Trans>Import</Trans>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-const RESUMES_VIEW_COOKIE_NAME = "resumes_view";
+const RESUMES_VIEW_STORAGE_KEY = "resumes_view";
 
-const viewSchema = z.enum(["grid", "list"]).catch("grid");
+function getInitialResumesView(): "grid" | "list" {
+  if (typeof window === "undefined") return "grid";
 
-const setViewServerFn = createServerFn({ method: "POST" })
-  .inputValidator(viewSchema)
-  .handler(async ({ data }) => {
-    setCookie(RESUMES_VIEW_COOKIE_NAME, JSON.stringify(data));
-  });
-
-const getViewServerFn = createServerFn({ method: "GET" }).handler(async () => {
-  const view = getCookie(RESUMES_VIEW_COOKIE_NAME);
-  if (!view) return "grid";
-  return viewSchema.parse(JSON.parse(view));
-});
+  const view = window.localStorage.getItem(RESUMES_VIEW_STORAGE_KEY);
+  return view === "list" ? "list" : "grid";
+}

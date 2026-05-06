@@ -14,8 +14,10 @@ import {
 } from "ai";
 import { createOllama } from "ai-sdk-ollama";
 import { jsonrepair } from "jsonrepair";
+import { extractRawText as extractDocxRawText } from "mammoth";
+import { PDFParse } from "pdf-parse";
 import { match } from "ts-pattern";
-import z, { flattenError, ZodError } from "zod";
+import z, { flattenError } from "zod";
 
 import type { JobResult } from "@/schema/jobs";
 import type { ResumeData } from "@/schema/resume/data";
@@ -23,16 +25,27 @@ import type { ResumeData } from "@/schema/resume/data";
 import chatSystemPromptTemplate from "@/integrations/ai/prompts/chat-system.md?raw";
 import docxParserSystemPrompt from "@/integrations/ai/prompts/docx-parser-system.md?raw";
 import docxParserUserPrompt from "@/integrations/ai/prompts/docx-parser-user.md?raw";
+import jobMatchSystemPromptTemplate from "@/integrations/ai/prompts/job-match-system.md?raw";
 import pdfParserSystemPrompt from "@/integrations/ai/prompts/pdf-parser-system.md?raw";
 import pdfParserUserPrompt from "@/integrations/ai/prompts/pdf-parser-user.md?raw";
+import webpageGeneratorSystemPromptTemplate from "@/integrations/ai/prompts/webpage-generator-system.md?raw";
 import tailorSystemPromptTemplate from "@/integrations/ai/prompts/tailor-system.md?raw";
 import {
   executePatchResume,
   patchResumeDescription,
   patchResumeInputSchema,
 } from "@/integrations/ai/tools/patch-resume";
+import {
+  jobMatchExplanationSchema,
+  jobMatchOutputSchema,
+  jobMatchSourceSchema,
+  type JobMatchExplanation,
+  type JobMatchOutput,
+  type JobMatchSource,
+} from "@/schema/job-match";
 import { defaultResumeData, resumeDataSchema } from "@/schema/resume/data";
 import { type TailorOutput, tailorOutputSchema } from "@/schema/tailor";
+import { scoreJobMatch } from "@/utils/job-match";
 import { isObject } from "@/utils/sanitize";
 
 const aiExtractionTemplate = {
@@ -210,27 +223,59 @@ function parseAndValidateResumeJson(resultText: string): ResumeData {
     jsonString = jsonString.substring(firstIndex, lastIndex + 1);
   }
 
+  let parsedJson: unknown;
+
   try {
     const repairedJson = jsonrepair(jsonString);
-    const parsedJson = JSON.parse(repairedJson);
-    const mergedData = mergeDefaults(defaultResumeData, parsedJson);
-    const normalizedData = normalizeResumeDataForSchema(mergedData);
-
-    return resumeDataSchema.parse({
-      ...normalizedData,
-      customSections: [],
-      picture: defaultResumeData.picture,
-      metadata: defaultResumeData.metadata,
-    });
+    parsedJson = JSON.parse(repairedJson);
   } catch (error: unknown) {
-    if (error instanceof ZodError) {
-      console.error("Zod validation failed during resume parsing:", flattenError(error));
-      throw error;
-    }
-
-    console.error("Unknown error during resume data validation:", error);
-    throw new Error("An unknown error occurred while validating the merged resume data.");
+    console.error("Unknown error during resume JSON parsing:", error);
+    throw new Error("An unknown error occurred while parsing AI output.");
   }
+
+  const mergedData = mergeDefaults(defaultResumeData, isObject(parsedJson) ? parsedJson : {});
+  const normalizedData = normalizeResumeDataForSchema(mergedData);
+
+  const strictResult = resumeDataSchema.safeParse({
+    ...normalizedData,
+    customSections: [],
+    picture: defaultResumeData.picture,
+    metadata: defaultResumeData.metadata,
+  });
+
+  if (strictResult.success) {
+    return strictResult.data;
+  }
+
+  console.error("Zod validation failed during resume parsing (strict pass):", flattenError(strictResult.error));
+
+  // Fallback pass: keep only safe top-level data and defaults for complex sections.
+  const parsedObject = isObject(parsedJson) ? parsedJson : {};
+  const fallbackData = {
+    ...defaultResumeData,
+    basics: mergeDefaults(
+      defaultResumeData.basics as Record<string, unknown>,
+      isObject(parsedObject.basics) ? (parsedObject.basics as Record<string, unknown>) : {},
+    ),
+    sections: normalizeResumeDataForSchema(
+      mergeDefaults(
+        defaultResumeData.sections as Record<string, unknown>,
+        isObject(parsedObject.sections) ? (parsedObject.sections as Record<string, unknown>) : {},
+      ),
+    ),
+    customSections: [],
+    picture: defaultResumeData.picture,
+    metadata: defaultResumeData.metadata,
+  };
+
+  const fallbackResult = resumeDataSchema.safeParse(fallbackData);
+
+  if (fallbackResult.success) {
+    return fallbackResult.data;
+  }
+
+  console.error("Zod validation failed during resume parsing (fallback pass):", flattenError(fallbackResult.error));
+  return defaultResumeData;
 }
 
 const sectionRequiredFieldMap = {
@@ -289,7 +334,15 @@ function normalizeResumeDataForSchema(data: Record<string, unknown>) {
   return { ...data, sections: normalizedSections };
 }
 
-export const aiProviderSchema = z.enum(["ollama", "openai", "gemini", "anthropic", "vercel-ai-gateway", "qwen", "deepseek"]);
+export const aiProviderSchema = z.enum([
+  "ollama",
+  "openai",
+  "gemini",
+  "anthropic",
+  "vercel-ai-gateway",
+  "qwen",
+  "deepseek",
+]);
 
 type AIProvider = z.infer<typeof aiProviderSchema>;
 
@@ -302,25 +355,30 @@ type GetModelInput = {
 
 const MAX_AI_FILE_BYTES = 10 * 1024 * 1024; // 10MB
 const MAX_AI_FILE_BASE64_CHARS = Math.ceil((MAX_AI_FILE_BYTES * 4) / 3) + 4;
+const MAX_RESUME_EXTRACTION_TEXT_CHARS = 120_000;
 
 function getModel(input: GetModelInput) {
   const { provider, model, apiKey } = input;
   const baseURL = input.baseURL || undefined;
 
   return match(provider)
-    .with("openai", () => createOpenAI({ apiKey, baseURL }).chat(model))
+    .with("openai", () => createOpenAI({ apiKey, baseURL }).responses(model))
     .with("ollama", () => createOllama({ apiKey, baseURL }).languageModel(model))
     .with("anthropic", () => createAnthropic({ apiKey, baseURL }).languageModel(model))
     .with("vercel-ai-gateway", () => createGateway({ apiKey, baseURL }).languageModel(model))
     .with("gemini", () => createGoogleGenerativeAI({ apiKey, baseURL }).languageModel(model))
-    .with("qwen", () => createOpenAI({
-      apiKey,
-      baseURL: baseURL || "https://dashscope.aliyuncs.com/api/v1"
-    }).chat(model))
-    .with("deepseek", () => createOpenAI({
-      apiKey,
-      baseURL: baseURL || "https://api.deepseek.com/v1"
-    }).chat(model))
+    .with("qwen", () =>
+      createOpenAI({
+        apiKey,
+        baseURL: baseURL || "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      }).responses(model),
+    )
+    .with("deepseek", () =>
+      createOpenAI({
+        apiKey,
+        baseURL: baseURL || "https://api.deepseek.com/v1",
+      }).chat(model),
+    )
     .exhaustive();
 }
 
@@ -336,6 +394,85 @@ export const fileInputSchema = z.object({
   data: z.string().max(MAX_AI_FILE_BASE64_CHARS, "File is too large. Maximum size is 10MB."), // base64 encoded
 });
 
+function getFileBuffer(file: z.infer<typeof fileInputSchema>): Buffer {
+  return Buffer.from(file.data, "base64");
+}
+
+function normalizeExtractedText(text: string): string {
+  const normalizedText = text.split("\u0000").join("").replace(/\r\n/g, "\n").trim();
+
+  if (normalizedText.length <= MAX_RESUME_EXTRACTION_TEXT_CHARS) {
+    return normalizedText;
+  }
+
+  return normalizedText.slice(0, MAX_RESUME_EXTRACTION_TEXT_CHARS).trimEnd();
+}
+
+function buildTextOnlyResumeParsingMessages({
+  systemPrompt,
+  userPrompt,
+  extractedText,
+  sourceLabel,
+  fileName,
+}: {
+  systemPrompt: string;
+  userPrompt: string;
+  extractedText: string;
+  sourceLabel: string;
+  fileName: string;
+}) {
+  return [
+    {
+      role: "system" as const,
+      content:
+        systemPrompt +
+        "\n\nIMPORTANT: You must return ONLY raw valid JSON. Do not return markdown, do not return explanations. Just the JSON object. Use the following JSON as a template and fill in the extracted values. For arrays, you MUST use the exact key names shown in the template (e.g. use 'description' instead of 'summary', 'website' instead of 'url'):\n\n" +
+        JSON.stringify(aiExtractionTemplate, null, 2),
+    },
+    {
+      role: "user" as const,
+      content:
+        `${userPrompt}\n\n` +
+        `The following ${sourceLabel} was extracted from the file ${fileName}. Use only this text as the source of truth.\n\n` +
+        "```text\n" +
+        extractedText +
+        "\n```",
+    },
+  ];
+}
+
+async function extractPdfText(file: z.infer<typeof fileInputSchema>): Promise<string> {
+  const parser = new PDFParse({ data: getFileBuffer(file) });
+
+  try {
+    const result = await parser.getText();
+    const extractedText = normalizeExtractedText(result.text ?? "");
+
+    if (extractedText.length === 0) {
+      throw new Error("The PDF file did not contain any extractable text.");
+    }
+
+    return extractedText;
+  } finally {
+    await parser.destroy();
+  }
+}
+
+async function extractDocxText(file: z.infer<typeof fileInputSchema>): Promise<string> {
+  const result = await extractDocxRawText({ buffer: getFileBuffer(file) });
+  const extractedText = normalizeExtractedText(result.value ?? "");
+
+  if (extractedText.length === 0) {
+    throw new Error("The DOCX file did not contain any extractable text.");
+  }
+
+  return extractedText;
+}
+
+function supportsLocalResumeTextExtraction(provider: AIProvider): boolean {
+  return provider === "deepseek" || provider === "qwen";
+}
+
 type TestConnectionInput = z.infer<typeof aiCredentialsSchema>;
 
 async function testConnection(input: TestConnectionInput): Promise<boolean> {
@@ -343,11 +480,10 @@ async function testConnection(input: TestConnectionInput): Promise<boolean> {
 
   const result = await generateText({
     model: getModel(input),
-    output: Output.choice({ options: [RESPONSE_OK] }),
-    messages: [{ role: "user", content: `Respond with "${RESPONSE_OK}"` }],
+    messages: [{ role: "user", content: `Respond with only ${RESPONSE_OK}` }],
   });
 
-  return result.output === RESPONSE_OK;
+  return result.text.trim() === RESPONSE_OK;
 }
 
 type ParsePdfInput = z.infer<typeof aiCredentialsSchema> & {
@@ -383,7 +519,46 @@ function buildResumeParsingMessages({
   ];
 }
 
+async function parseResumeFromExtractedText({
+  model,
+  file,
+  mediaType,
+  systemPrompt,
+  userPrompt,
+}: {
+  model: ReturnType<typeof getModel>;
+  file: z.infer<typeof fileInputSchema>;
+  mediaType: string;
+  systemPrompt: string;
+  userPrompt: string;
+}): Promise<ResumeData> {
+  const extractedText = mediaType === "application/pdf" ? await extractPdfText(file) : await extractDocxText(file);
+
+  const result = await generateText({
+    model,
+    messages: buildTextOnlyResumeParsingMessages({
+      systemPrompt,
+      userPrompt,
+      extractedText,
+      sourceLabel: mediaType === "application/pdf" ? "PDF text" : "DOCX text",
+      fileName: file.name,
+    }),
+  }).catch((error: unknown) => logAndRethrow("Failed to generate the text with the model", error));
+
+  return parseAndValidateResumeJson(result.text);
+}
+
 async function parsePdf(input: ParsePdfInput): Promise<ResumeData> {
+  if (supportsLocalResumeTextExtraction(input.provider)) {
+    return parseResumeFromExtractedText({
+      model: getModel(input),
+      file: input.file,
+      mediaType: "application/pdf",
+      systemPrompt: pdfParserSystemPrompt,
+      userPrompt: pdfParserUserPrompt,
+    });
+  }
+
   const model = getModel(input);
 
   const result = await generateText({
@@ -405,6 +580,22 @@ type ParseDocxInput = z.infer<typeof aiCredentialsSchema> & {
 };
 
 async function parseDocx(input: ParseDocxInput): Promise<ResumeData> {
+  if (supportsLocalResumeTextExtraction(input.provider)) {
+    if (input.mediaType === "application/msword") {
+      throw new Error(
+        "DeepSeek and Qwen direct import currently support DOCX files only. Please convert the DOC file to DOCX first.",
+      );
+    }
+
+    return parseResumeFromExtractedText({
+      model: getModel(input),
+      file: input.file,
+      mediaType: input.mediaType,
+      systemPrompt: docxParserSystemPrompt,
+      userPrompt: docxParserUserPrompt,
+    });
+  }
+
   const model = getModel(input);
 
   const result = await generateText({
@@ -467,6 +658,25 @@ function buildTailorSystemPrompt(resumeData: ResumeData, job: JobResult): string
     .replace("{{JOB_SKILLS}}", (job.job_required_skills || []).join(", ") || "None specified.");
 }
 
+type BuildWebpageGeneratorPromptInput = {
+  name: string;
+  targetRole: string;
+  summary: string;
+  aboutCsv: string;
+  projectCsv: string;
+  additionalContent?: string;
+};
+
+function buildWebpageGeneratorSystemPrompt(input: BuildWebpageGeneratorPromptInput): string {
+  return webpageGeneratorSystemPromptTemplate
+    .replace("{{NAME}}", input.name)
+    .replace("{{TARGET_ROLE}}", input.targetRole)
+    .replace("{{SUMMARY}}", input.summary)
+    .replace("{{ABOUT_CSV}}", input.aboutCsv)
+    .replace("{{PROJECT_CSV}}", input.projectCsv)
+    .replace("{{ADDITIONAL_CONTENT}}", input.additionalContent ?? "");
+}
+
 type TailorResumeInput = z.infer<typeof aiCredentialsSchema> & {
   resumeData: ResumeData;
   job: JobResult;
@@ -495,8 +705,121 @@ async function tailorResume(input: TailorResumeInput): Promise<TailorOutput> {
   return tailorOutputSchema.parse(result.output);
 }
 
+function buildJobMatchExtractionPrompt(mode: "JOB_DESCRIPTION" | "RESUME"): string {
+  return jobMatchSystemPromptTemplate.replace("{{MODE}}", mode);
+}
+
+async function extractJobMatchSource(
+  model: ReturnType<typeof getModel>,
+  mode: "JOB_DESCRIPTION" | "RESUME",
+  text: string,
+): Promise<JobMatchSource> {
+  const result = await generateText({
+    model,
+    output: Output.object({ schema: jobMatchSourceSchema }),
+    messages: [
+      { role: "system", content: buildJobMatchExtractionPrompt(mode) },
+      { role: "user", content: text },
+    ],
+  });
+
+  if (result.output == null) {
+    throw new Error(`AI returned no structured ${mode.toLowerCase()} output.`);
+  }
+
+  return jobMatchSourceSchema.parse(result.output);
+}
+
+function buildJobMatchExplanationPrompt(input: {
+  job: JobMatchSource;
+  resume: JobMatchSource;
+  analysis: ReturnType<typeof scoreJobMatch>;
+}): string {
+  const missingSummary = input.analysis.gaps.required.length > 0 ? input.analysis.gaps.required.join("; ") : "None";
+  const desiredSummary = input.analysis.gaps.desired.length > 0 ? input.analysis.gaps.desired.join("; ") : "None";
+
+  return [
+    "You are writing an explainable AI report for a job-cv matching system.",
+    "Return only JSON.",
+    "Schema: { explanation: string, strengths: string[], weaknesses: string[], suggestions: string[], whyLow: string }",
+    "",
+    `Match score: ${input.analysis.matchScore}%`,
+    `Weights: ${JSON.stringify(input.analysis.weights)}`,
+    `Sub-scores: ${JSON.stringify(input.analysis.subScores)}`,
+    `Required gaps: ${missingSummary}`,
+    `Desired gaps: ${desiredSummary}`,
+    `Top strengths: ${input.analysis.strengths.join("; ") || "None"}`,
+    `Top weaknesses: ${input.analysis.weaknesses.join("; ") || "None"}`,
+    `JD summary: ${input.job.summary ?? "N/A"}`,
+    `Resume summary: ${input.resume.summary ?? "N/A"}`,
+    "",
+    "Write concise, factual, and actionable feedback. Focus on why the score is high or low, what is missing, and how the resume can be improved.",
+  ].join("\n");
+}
+
+async function explainJobMatch(input: {
+  model: ReturnType<typeof getModel>;
+  job: JobMatchSource;
+  resume: JobMatchSource;
+  analysis: ReturnType<typeof scoreJobMatch>;
+}): Promise<JobMatchExplanation> {
+  const result = await generateText({
+    model: input.model,
+    output: Output.object({ schema: jobMatchExplanationSchema }),
+    messages: [
+      { role: "system", content: buildJobMatchExplanationPrompt(input) },
+      {
+        role: "user",
+        content: JSON.stringify(
+          {
+            parsedJob: input.job,
+            parsedResume: input.resume,
+            analysis: input.analysis,
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  });
+
+  if (result.output == null) {
+    throw new Error("AI returned no job match explanation.");
+  }
+
+  return jobMatchExplanationSchema.parse(result.output);
+}
+
+type MatchJobCvInput = z.infer<typeof aiCredentialsSchema> & {
+  jobDescription: string;
+  resumeText: string;
+};
+
+async function matchJobCv(input: MatchJobCvInput): Promise<JobMatchOutput> {
+  const model = getModel(input);
+  const [parsedJob, parsedResume] = await Promise.all([
+    extractJobMatchSource(model, "JOB_DESCRIPTION", input.jobDescription),
+    extractJobMatchSource(model, "RESUME", input.resumeText),
+  ]);
+
+  const analysis = scoreJobMatch(parsedJob, parsedResume);
+  const explanation = await explainJobMatch({ model, job: parsedJob, resume: parsedResume, analysis });
+
+  return jobMatchOutputSchema.parse({
+    ...analysis,
+    parsedJob,
+    parsedResume,
+    explanation: explanation.explanation,
+    strengths: explanation.strengths.length > 0 ? explanation.strengths : analysis.strengths,
+    weaknesses: explanation.weaknesses.length > 0 ? explanation.weaknesses : analysis.weaknesses,
+    suggestions: explanation.suggestions,
+  });
+}
+
 export const aiService = {
   chat,
+  buildWebpageGeneratorSystemPrompt,
+  matchJobCv,
   parseDocx,
   parsePdf,
   tailorResume,

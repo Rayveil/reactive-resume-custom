@@ -29,6 +29,7 @@ import { cn } from "@/utils/style";
 
 import { DashboardHeader } from "../-components/header";
 import { JobDetailSheet } from "./-components/job-detail";
+import { JobMatchPanel } from "./-components/job-match-panel";
 import { formatPostedDate, formatSalary, getQuotaStatus } from "./-components/job-utils";
 import { hasActiveFilters, initialFilterState, SearchFilters } from "./-components/search-filters";
 import { useJobSearch } from "./-components/use-job-search";
@@ -301,6 +302,10 @@ function RouteComponent() {
           )}
         </div>
       )}
+
+      <Separator />
+
+      <JobMatchPanel />
 
       <JobDetailSheet job={selectedJob} open={sheetOpen} onOpenChange={setSheetOpen} />
     </div>

@@ -33,6 +33,108 @@ msgstr "创建时间"
 msgid "Name"
 msgstr "姓名"
 
+#: src/routes/dashboard/work/index.tsx
+#: src/components/command-palette/pages/navigation.tsx
+#: src/routes/dashboard/-components/sidebar.tsx
+msgid "Work"
+msgstr "工作"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Company"
+msgstr "公司"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Position"
+msgstr "职位"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Application Link"
+msgstr "投递链接"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Responsibilities"
+msgstr "岗位职责"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Linked Resume"
+msgstr "关联简历"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Status"
+msgstr "状态"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Save Changes"
+msgstr "保存更改"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Add Work Item"
+msgstr "新增工作记录"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "No work items yet. Add your first company and position above."
+msgstr "暂无工作记录。请先在上方添加第一条公司和职位信息。"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Open Apply Link"
+msgstr "打开投递链接"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Evaluate Resume Match"
+msgstr "评估简历匹配度"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Evaluating..."
+msgstr "评估中..."
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Match"
+msgstr "匹配度"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Draft"
+msgstr "草稿"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Saved"
+msgstr "已保存"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Applied"
+msgstr "已投递"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Interview"
+msgstr "面试"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Offer"
+msgstr "Offer"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Rejected"
+msgstr "未通过"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Select a resume"
+msgstr "选择简历"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "e.g. Acme Corp"
+msgstr "例如：Acme Corp"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "e.g. Frontend Engineer"
+msgstr "例如：前端工程师"
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Paste key requirements and responsibilities from the job post..."
+msgstr "粘贴职位描述中的关键要求和职责..."
+
+#: src/routes/dashboard/work/index.tsx
+msgid "Not enough text to compute a match score."
+msgstr "文本不足，无法计算匹配度。"
+
 #: src/routes/dashboard/resumes/index.tsx
 msgid "Resume studio"
 msgstr "简历工作台"
@@ -89,6 +191,16 @@ msgstr "填写信息创建简历"
 #: src/routes/dashboard/resumes/-components/cards/create-card.tsx
 msgid "Save your personal information and start editing"
 msgstr "保存个人信息并开始编辑"
+
+#: src/dialogs/resume/index.tsx
+msgid "Personal information"
+msgstr "个人信息"
+
+#: src/dialogs/resume/index.tsx
+msgid "This information will be saved in the new resume and can be reused later."
+msgstr "这些信息会保存到新简历中，后续可重复使用。"
+
+
 
 #: src/routes/_home/-sections/hero.tsx
 msgid "(opens in new tab)"
@@ -875,6 +987,14 @@ msgstr "创建新推荐人"
 msgid "Create a new resume"
 msgstr "创建新简历"
 
+#: src/dialogs/resume/index.tsx
+msgid "Start with a title, then save the personal details you want to reuse later."
+msgstr "先填写标题，再保存你希望后续复用的个人信息。"
+
+#: src/dialogs/resume/index.tsx
+msgid "Full Name"
+msgstr "姓名"
+
 #: src/dialogs/resume/sections/skill.tsx
 msgid "Create a new skill"
 msgstr "创建新技能"
@@ -1491,6 +1611,190 @@ msgstr "帮助把应用翻译成你的语言"
 #: src/dialogs/resume/template/gallery.tsx
 msgid "Here's a range of resume templates for different professions and personalities. Whether you prefer modern or classic, bold or simple, there is a design to match you. Look through the options below and choose a template that fits your style."
 msgstr "这里提供多种适用于不同职业和性格的简历模板。无论你偏爱现代或经典、张扬或简约，都能找到适合你的设计。浏览下方选项，选择一款符合你风格的模板。"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Generate Webpage"
+msgstr "生成个人网页"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Create a beautiful, shareable webpage from your resume profile"
+msgstr "基于你的简历资料，生成美观且可分享的个人网页"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Download Webpage"
+msgstr "下载网页"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Export as standalone HTML file ready to share"
+msgstr "导出为可直接分享的独立 HTML 文件"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Features"
+msgstr "功能"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Fully responsive design"
+msgstr "响应式布局"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Print-friendly layout"
+msgstr "打印友好"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "No external dependencies"
+msgstr "无外部依赖"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "SEO optimized"
+msgstr "SEO 优化"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Easy to share"
+msgstr "易于分享"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Pro Tips"
+msgstr "使用建议"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Make sure your profile data is complete in the Personal section"
+msgstr "先在 Personal 页面补全个人资料"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Preview looks best on desktop screens"
+msgstr "建议先在桌面端预览效果"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Test in different browsers before sharing"
+msgstr "分享前在不同浏览器各测试一次"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Initial Prompt"
+msgstr "初始提示词"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Chinese"
+msgstr "中文"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "English"
+msgstr "英文"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Regenerate"
+msgstr "重新生成"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Copy"
+msgstr "复制"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Generated from your current profile data. You can copy and edit it before sending to AI."
+msgstr "根据你当前个人资料自动生成。复制后可继续修改，再发送给 AI。"
+
+#: src/routes/dashboard/webpage/-components/template-selector.tsx
+msgid "Choose a Template"
+msgstr "选择模板"
+
+#: src/routes/dashboard/webpage/template-selector.tsx
+msgid "Modern"
+msgstr "现代风"
+
+#: src/routes/dashboard/webpage/template-selector.tsx
+msgid "Clean and contemporary design with gradient accents"
+msgstr "干净现代的设计，带有渐变强调"
+
+#: src/routes/dashboard/webpage/template-selector.tsx
+msgid "Blue gradient header, modern typography, card-based layout"
+msgstr "蓝色渐变头图、现代排版、卡片式布局"
+
+#: src/routes/dashboard/webpage/template-selector.tsx
+msgid "Professional"
+msgstr "专业风"
+
+#: src/routes/dashboard/webpage/template-selector.tsx
+msgid "Classic two-column layout perfect for corporate roles"
+msgstr "经典双栏布局，适合职场与学术场景"
+
+#: src/routes/dashboard/webpage/template-selector.tsx
+msgid "Dark sidebar, organized sections, minimalist aesthetic"
+msgstr "深色侧栏、结构清晰、极简风格"
+
+#: src/routes/dashboard/webpage/template-selector.tsx
+msgid "Creative"
+msgstr "创意风"
+
+#: src/routes/dashboard/webpage/template-selector.tsx
+msgid "Bold and vibrant design for creative professionals"
+msgstr "更大胆鲜明的视觉表达，适合创意岗位"
+
+#: src/routes/dashboard/webpage/template-selector.tsx
+msgid "Purple-pink gradient, timeline design, modern accents"
+msgstr "紫粉渐变、时间线风格、现代化装饰"
+
+#: src/routes/dashboard/webpage/-components/webpage-preview.tsx
+msgid "Preview"
+msgstr "预览"
+
+#: src/routes/dashboard/webpage/webpage-preview.tsx
+msgid "Generating..."
+msgstr "生成中..."
+
+#: src/routes/dashboard/webpage/webpage-preview.tsx
+msgid "Refresh"
+msgstr "刷新"
+
+#: src/routes/dashboard/webpage/webpage-preview.tsx
+msgid "Loading preview..."
+msgstr "正在加载预览..."
+
+#: src/routes/dashboard/webpage/-components/webpage-export-dialog.tsx
+msgid "Export Webpage"
+msgstr "导出网页"
+
+#: src/routes/dashboard/webpage/webpage-export-dialog.tsx
+msgid "Filename"
+msgstr "文件名"
+
+#: src/routes/dashboard/webpage/webpage-export-dialog.tsx
+msgid "A standalone HTML file that can be opened in any browser"
+msgstr "这是一个独立 HTML 文件，可直接在浏览器中打开。"
+
+#: src/routes/dashboard/webpage/webpage-export-dialog.tsx
+msgid "Tip:"
+msgstr "提示："
+
+#: src/routes/dashboard/webpage/webpage-export-dialog.tsx
+msgid "Share the HTML file directly or upload it to any web hosting service."
+msgstr "可直接分享 HTML 文件，或上传到任意静态托管服务。"
+
+#: src/routes/dashboard/webpage/webpage-export-dialog.tsx
+msgid "Cancel"
+msgstr "取消"
+
+#: src/routes/dashboard/webpage/webpage-export-dialog.tsx
+msgid "Exporting..."
+msgstr "导出中..."
+
+#: src/routes/dashboard/webpage/webpage-export-dialog.tsx
+msgid "Download"
+msgstr "下载"
+
+#: src/routes/dashboard/webpage/webpage-export-dialog.tsx
+msgid "Webpage exported successfully!"
+msgstr "网页导出成功！"
+
+#: src/routes/dashboard/webpage/webpage-export-dialog.tsx
+msgid "Failed to export webpage. Please try again."
+msgstr "导出失败，请重试。"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Initial prompt copied to clipboard."
+msgstr "初始提示词已复制到剪贴板。"
+
+#: src/routes/dashboard/webpage/route.tsx
+msgid "Failed to copy prompt. Please copy it manually from the text area."
+msgstr "复制失败，请手动从文本框复制。"
 
 #: src/dialogs/api-key/create.tsx
 msgid "Here's your new API key"

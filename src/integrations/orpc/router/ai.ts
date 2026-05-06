@@ -4,21 +4,21 @@ import { AISDKError, type UIMessage } from "ai";
 import { OllamaError } from "ai-sdk-ollama";
 import z, { flattenError, ZodError } from "zod";
 
+import { jobMatchOutputSchema } from "@/schema/job-match";
 import { jobResultSchema } from "@/schema/jobs";
 import { type ResumeData, resumeDataSchema } from "@/schema/resume/data";
 import { tailorOutputSchema } from "@/schema/tailor";
 
-import { protectedProcedure } from "../context";
+import { protectedProcedureInProduction, publicProcedure } from "../context";
 import { aiCredentialsSchema, aiProviderSchema, aiService, fileInputSchema } from "../services/ai";
 
 type AIProvider = z.infer<typeof aiProviderSchema>;
 
 export const aiRouter = {
-  testConnection: protectedProcedure
+  testConnection: protectedProcedureInProduction
     .route({
       method: "POST",
       path: "/ai/test-connection",
-      tags: ["AI"],
       operationId: "testAiConnection",
       summary: "Test AI provider connection",
       description:
@@ -46,16 +46,14 @@ export const aiRouter = {
         if (error instanceof AISDKError || error instanceof OllamaError) {
           throw new ORPCError("BAD_GATEWAY", { message: error.message });
         }
-
         throw error;
       }
     }),
 
-  parsePdf: protectedProcedure
+  parsePdf: publicProcedure
     .route({
       method: "POST",
       path: "/ai/parse-pdf",
-      tags: ["AI"],
       operationId: "parseResumePdf",
       summary: "Parse a PDF file into resume data",
       description:
@@ -85,7 +83,6 @@ export const aiRouter = {
         if (error instanceof AISDKError) {
           throw new ORPCError("BAD_GATEWAY", { message: error.message });
         }
-
         if (error instanceof ZodError) {
           throw new ORPCError("BAD_REQUEST", {
             message: "Invalid resume data structure",
@@ -96,11 +93,10 @@ export const aiRouter = {
       }
     }),
 
-  parseDocx: protectedProcedure
+  parseDocx: publicProcedure
     .route({
       method: "POST",
       path: "/ai/parse-docx",
-      tags: ["AI"],
       operationId: "parseResumeDocx",
       summary: "Parse a DOCX file into resume data",
       description:
@@ -134,23 +130,20 @@ export const aiRouter = {
         if (error instanceof AISDKError) {
           throw new ORPCError("BAD_GATEWAY", { message: error.message });
         }
-
         if (error instanceof ZodError) {
           throw new ORPCError("BAD_REQUEST", {
             message: "Invalid resume data structure",
             cause: flattenError(error),
           });
         }
-
         throw error;
       }
     }),
 
-  chat: protectedProcedure
+  chat: protectedProcedureInProduction
     .route({
       method: "POST",
       path: "/ai/chat",
-      tags: ["AI"],
       operationId: "aiChat",
       summary: "Chat with AI to modify resume",
       description:
@@ -173,16 +166,14 @@ export const aiRouter = {
         if (error instanceof AISDKError || error instanceof OllamaError) {
           throw new ORPCError("BAD_GATEWAY", { message: error.message });
         }
-
         throw error;
       }
     }),
 
-  tailorResume: protectedProcedure
+  tailorResume: protectedProcedureInProduction
     .route({
       method: "POST",
       path: "/ai/tailor-resume",
-      tags: ["AI"],
       operationId: "tailorResume",
       summary: "Auto-tailor resume for a job posting",
       description:
@@ -218,6 +209,53 @@ export const aiRouter = {
         if (error instanceof ZodError) {
           throw new ORPCError("BAD_REQUEST", {
             message: "Invalid resume data structure",
+            cause: flattenError(error),
+          });
+        }
+
+        throw error;
+      }
+    }),
+
+  matchJobCv: publicProcedure
+    .route({
+      method: "POST",
+      path: "/ai/match-job-cv",
+      operationId: "matchJobCv",
+      summary: "Analyze how well a resume matches a job description",
+      description:
+        "Parses a job description and resume text with the selected AI provider, computes a weighted match score, and returns an explainable matching report. Requires AI provider credentials.",
+      successDescription: "Structured job-cv matching output returned successfully.",
+    })
+    .input(
+      z.object({
+        ...aiCredentialsSchema.shape,
+        jobDescription: z.string().min(1),
+        resumeText: z.string().min(1),
+      }),
+    )
+    .output(jobMatchOutputSchema)
+    .errors({
+      BAD_GATEWAY: {
+        message: "The AI provider returned an error or is unreachable.",
+        status: 502,
+      },
+      BAD_REQUEST: {
+        message: "The AI returned an improperly formatted structure.",
+        status: 400,
+      },
+    })
+    .handler(async ({ input }) => {
+      try {
+        return await aiService.matchJobCv(input);
+      } catch (error) {
+        if (error instanceof AISDKError || error instanceof OllamaError) {
+          throw new ORPCError("BAD_GATEWAY", { message: error.message });
+        }
+
+        if (error instanceof ZodError) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Invalid job match data structure",
             cause: flattenError(error),
           });
         }

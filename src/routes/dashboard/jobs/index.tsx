@@ -1,161 +1,287 @@
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { BriefcaseIcon } from "@phosphor-icons/react";
+import { BriefcaseIcon, GlobeIcon, PencilSimpleLineIcon, PlusIcon, TrashSimpleIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
+import { zodValidator } from "@tanstack/zod-adapter";
+import { useEffect, useMemo, useState } from "react";
+import z from "zod";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { orpc } from "@/integrations/orpc/client";
+import { client, orpc } from "@/integrations/orpc/client";
 
 import { DashboardHeader } from "../-components/header";
-import { JobDetail } from "./-components/job-detail";
-import { JobList } from "./-components/job-list";
-import { MatchPanel } from "./-components/match-panel";
+
+type WorkStatus = "draft" | "saved" | "applied" | "interview" | "offer" | "rejected";
+type WorkStatusFilter = WorkStatus | "all";
+
+const searchSchema = z.object({
+  status: z.enum(["all", "draft", "saved", "applied", "interview", "offer", "rejected"]).default("all"),
+});
 
 export const Route = createFileRoute("/dashboard/jobs/")({
   component: RouteComponent,
+  validateSearch: zodValidator(searchSchema),
+  search: {
+    middlewares: [stripSearchParams({ status: "all" })],
+  },
 });
 
-type Job = {
+type WorkEntry = {
   id: string;
   company: string;
-  title: string;
-  link: string;
-  description: string;
+  position: string;
+  applyUrl: string;
+  responsibilities: string;
+  resumeId: string;
+  status: WorkStatus;
+  matchScore: number | null;
+  matchReason: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
-type ResumeOption = {
-  id: string;
-  name: string;
-  skills: string[];
+type WorkFormState = {
+  company: string;
+  position: string;
+  applyUrl: string;
+  responsibilities: string;
+  resumeId: string;
+  status: WorkStatus;
 };
 
-type MatchResult = {
-  score: number;
-  skills: Array<{ name: string; matched: boolean }>;
+const STORAGE_KEY = "work-tracker.entries";
+
+const defaultFormState: WorkFormState = {
+  company: "",
+  position: "",
+  applyUrl: "",
+  responsibilities: "",
+  resumeId: "",
+  status: "draft",
 };
 
-const initialJobs: Job[] = [
-  {
-    id: crypto.randomUUID(),
-    company: "Acme Tech",
-    title: "Frontend Engineer",
-    link: "https://example.com/jobs/frontend-engineer",
-    description:
-      "Build React interfaces, optimize performance, collaborate with designers, write reusable components, and maintain accessibility best practices.",
-  },
-  {
-    id: crypto.randomUUID(),
-    company: "Northwind Data",
-    title: "Full Stack Developer",
-    link: "https://example.com/jobs/fullstack",
-    description:
-      "Develop TypeScript APIs and web apps, own database modeling, improve CI pipelines, and deliver features with strong product thinking.",
-  },
+const statusOptions: Array<{ value: WorkStatus; label: string }> = [
+  { value: "draft", label: t`Draft` },
+  { value: "saved", label: t`Saved` },
+  { value: "applied", label: t`Applied` },
+  { value: "interview", label: t`Interview` },
+  { value: "offer", label: t`Offer` },
+  { value: "rejected", label: t`Rejected` },
+];
+
+const statusFilterOptions: Array<{ value: WorkStatusFilter; label: string }> = [
+  { value: "all", label: t`All statuses` },
+  ...statusOptions,
 ];
 
 function RouteComponent() {
-  const { data: resumeList } = useQuery(orpc.resume.list.queryOptions());
-
-  const [jobs, setJobs] = useState<Job[]>(initialJobs);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const [isJobDetailOpen, setIsJobDetailOpen] = useState(false);
-  const [selectedResumeId, setSelectedResumeId] = useState("");
-  const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-  const [form, setForm] = useState<Omit<Job, "id">>({
-    company: "",
-    title: "",
-    link: "",
-    description: "",
+  const navigate = useNavigate({ from: Route.fullPath });
+  const { status: statusFilter } = Route.useSearch();
+  const { session } = Route.useRouteContext();
+  const { data: resumeList } = useQuery({
+    ...orpc.resume.list.queryOptions(),
+    enabled: Boolean(session) || !import.meta.env.DEV,
   });
 
-  const resumeOptions = useMemo<ResumeOption[]>(() => {
-    if (!resumeList || resumeList.length === 0) {
-      return [
-        { id: "mock-fe", name: "Frontend Resume", skills: ["react", "typescript", "accessibility", "performance"] },
-        { id: "mock-fs", name: "Full Stack Resume", skills: ["node", "typescript", "postgres", "api", "ci"] },
-      ];
-    }
+  const [entries, setEntries] = useState<WorkEntry[]>(() => {
+    if (typeof window === "undefined") return [];
 
-    return resumeList.map((resume) => ({
-      id: resume.id,
-      name: resume.name,
-      skills: resume.name.toLowerCase().split(/\s+/).filter((word) => word.length > 2),
-    }));
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+
+    try {
+      return JSON.parse(raw) as WorkEntry[];
+    } catch {
+      return [];
+    }
+  });
+
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isEvaluatingId, setIsEvaluatingId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [form, setForm] = useState<WorkFormState>(defaultFormState);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  }, [entries]);
+
+  const filteredEntries = useMemo(() => {
+    if (statusFilter === "all") return entries;
+    return entries.filter((entry) => entry.status === statusFilter);
+  }, [entries, statusFilter]);
+
+  const statusLabelMap = useMemo(() => {
+    return Object.fromEntries(statusOptions.map((option) => [option.value, option.label])) as Record<
+      WorkStatus,
+      string
+    >;
+  }, []);
+
+  const resumeNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const resume of resumeList ?? []) {
+      map.set(resume.id, resume.name);
+    }
+    return map;
   }, [resumeList]);
 
-  const selectedJob = useMemo(() => jobs.find((job) => job.id === selectedJobId) ?? null, [jobs, selectedJobId]);
+  const resumeOptions = useMemo(() => {
+    return (resumeList ?? []).map((resume) => ({ value: resume.id, label: resume.name }));
+  }, [resumeList]);
 
-  const onOpenJob = (job: Job) => {
-    setSelectedJobId(job.id);
-    setSelectedResumeId("");
-    setMatchResult(null);
-    setIsJobDetailOpen(true);
-  };
+  const persistEntries = (nextEntries: WorkEntry[]) => {
+    setEntries(nextEntries);
 
-  const onDeleteJob = (id: string) => {
-    setJobs((prev) => prev.filter((job) => job.id !== id));
-
-    if (selectedJobId === id) {
-      setSelectedJobId(null);
-      setIsJobDetailOpen(false);
-      setMatchResult(null);
-      setSelectedResumeId("");
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextEntries));
     }
   };
 
-  const onCreateJob = () => {
-    if (!form.company.trim() || !form.title.trim() || !form.description.trim()) return;
-
-    const nextJob: Job = {
-      id: crypto.randomUUID(),
-      company: form.company.trim(),
-      title: form.title.trim(),
-      link: form.link.trim(),
-      description: form.description.trim(),
-    };
-
-    setJobs((prev) => [nextJob, ...prev]);
-    setForm({ company: "", title: "", link: "", description: "" });
-    setIsAddDialogOpen(false);
+  const resetForm = () => {
+    setEditingId(null);
+    setFormError(null);
+    setForm(defaultFormState);
   };
 
-  const onAnalyze = () => {
-    if (!selectedJob || !selectedResumeId) return;
+  const openCreateForm = () => {
+    resetForm();
+    setIsFormOpen(true);
+  };
 
-    setIsAnalyzing(true);
+  const openEditForm = (entry: WorkEntry) => {
+    setEditingId(entry.id);
+    setForm({
+      company: entry.company,
+      position: entry.position,
+      applyUrl: entry.applyUrl,
+      responsibilities: entry.responsibilities,
+      resumeId: entry.resumeId,
+      status: entry.status,
+    });
+    setIsFormOpen(true);
+  };
 
-    const jobKeywords = extractKeywords(selectedJob.description);
-    const selectedResume = resumeOptions.find((resume) => resume.id === selectedResumeId);
-    const resumeSkills = selectedResume?.skills ?? [];
+  const closeForm = () => {
+    setIsFormOpen(false);
+    resetForm();
+  };
 
-    const skills = jobKeywords.slice(0, 8).map((keyword) => ({
-      name: keyword,
-      matched: resumeSkills.includes(keyword),
-    }));
+  const onSave = () => {
+    if (!form.company.trim() || !form.position.trim()) {
+      setFormError(t`Company and Position are required.`);
+      return;
+    }
 
-    const matchedCount = skills.filter((item) => item.matched).length;
-    const score = skills.length === 0 ? 0 : Math.round((matchedCount / skills.length) * 100);
+    setFormError(null);
 
-    setMatchResult({ score, skills });
-    setIsAnalyzing(false);
+    const now = new Date().toISOString();
+
+    const nextEntries = editingId
+      ? entries.map((entry) =>
+          entry.id === editingId
+            ? {
+                ...entry,
+                company: form.company.trim(),
+                position: form.position.trim(),
+                applyUrl: form.applyUrl.trim(),
+                responsibilities: form.responsibilities.trim(),
+                resumeId: form.resumeId,
+                status: form.status,
+                updatedAt: now,
+              }
+            : entry,
+        )
+      : [
+          {
+            id: crypto.randomUUID(),
+            company: form.company.trim(),
+            position: form.position.trim(),
+            applyUrl: form.applyUrl.trim(),
+            responsibilities: form.responsibilities.trim(),
+            resumeId: form.resumeId,
+            status: form.status,
+            matchScore: null,
+            matchReason: "",
+            createdAt: now,
+            updatedAt: now,
+          },
+          ...entries,
+        ];
+
+    persistEntries(nextEntries);
+
+    closeForm();
+  };
+
+  const onDelete = (id: string) => {
+    const nextEntries = entries.filter((entry) => entry.id !== id);
+    persistEntries(nextEntries);
+
+    if (editingId === id) {
+      closeForm();
+    }
+  };
+
+  const onEvaluate = async (entry: WorkEntry) => {
+    if (!entry.resumeId) return;
+
+    setIsEvaluatingId(entry.id);
+
+    try {
+      const resume = await client.resume.getById({ id: entry.resumeId });
+
+      const jobText = `${entry.company} ${entry.position} ${entry.responsibilities}`;
+      const resumeText = [
+        resume.data.basics.name,
+        resume.data.basics.headline,
+        resume.data.summary.content,
+        ...resume.data.sections.skills.items.flatMap((skill) => [skill.name, ...skill.keywords]),
+        ...resume.data.sections.experience.items.flatMap((item) => [item.company, item.position, item.description]),
+      ].join(" ");
+
+      const { score, reason } = estimateMatch(jobText, resumeText);
+
+      const nextEntries = entries.map((item) =>
+        item.id === entry.id
+          ? {
+              ...item,
+              matchScore: score,
+              matchReason: reason,
+              updatedAt: new Date().toISOString(),
+            }
+          : item,
+      );
+
+      persistEntries(nextEntries);
+
+      void navigate({
+        to: "/builder/$resumeId",
+        params: { resumeId: entry.resumeId },
+        search: {
+          leftMode: "manual",
+          rightMode: "job-analysis",
+          jobId: entry.id,
+          jobCompany: entry.company,
+          jobPosition: entry.position,
+          jobUrl: entry.applyUrl,
+          jobResponsibilities: entry.responsibilities,
+          jobStatus: entry.status,
+          jobMatchScore: score.toString(),
+          jobMatchReason: reason,
+        },
+      });
+    } finally {
+      setIsEvaluatingId(null);
+    }
   };
 
   return (
@@ -164,147 +290,254 @@ function RouteComponent() {
 
       <Separator />
 
-      <JobList
-        jobs={jobs}
-        selectedJobId={selectedJobId}
-        onOpenAddDialog={() => setIsAddDialogOpen(true)}
-        onDeleteJob={onDeleteJob}
-        onSelectJob={onOpenJob}
-      />
+      <div className="flex flex-col gap-4 rounded-md border bg-popover p-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="w-full max-w-sm space-y-2">
+          <Label>
+            <Trans>All statuses</Trans>
+          </Label>
+          <Combobox
+            value={statusFilter}
+            options={statusFilterOptions}
+            showClear={false}
+            onValueChange={(value) => {
+              void navigate({
+                search: {
+                  status: (value as WorkStatusFilter | null) ?? "all",
+                },
+              });
+            }}
+          />
+        </div>
 
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              <Trans>Add Job</Trans>
-            </DialogTitle>
-            <DialogDescription>
-              <Trans>Create a new job entry for tracking and match analysis.</Trans>
-            </DialogDescription>
-          </DialogHeader>
+        <Button onClick={openCreateForm}>
+          <PlusIcon />
+          <Trans>新增工作记录</Trans>
+        </Button>
+      </div>
 
-          <div className="grid gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="job-company">
-                <Trans>Company</Trans>
-              </Label>
-              <Input
-                id="job-company"
-                value={form.company}
-                onChange={(e) => setForm((prev) => ({ ...prev, company: e.target.value }))}
-                placeholder={t`e.g. Acme Tech`}
-              />
+      {filteredEntries.length === 0 ? (
+        <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+          {entries.length === 0 ? (
+            <Trans>No work items yet. Add your first company and position above.</Trans>
+          ) : (
+            <Trans>No work items in this status.</Trans>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredEntries.map((entry) => {
+            const linkedResume = entry.resumeId ? resumeNameMap.get(entry.resumeId) : null;
+
+            return (
+              <div key={entry.id} className="space-y-3 rounded-md border bg-card p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-medium">{entry.position}</h3>
+                    <p className="text-sm text-muted-foreground">{entry.company}</p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button size="icon" variant="ghost" onClick={() => openEditForm(entry)}>
+                      <PencilSimpleLineIcon />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => onDelete(entry.id)}>
+                      <TrashSimpleIcon />
+                    </Button>
+                  </div>
+                </div>
+
+                {entry.responsibilities && (
+                  <p className="text-sm whitespace-pre-wrap text-muted-foreground">{entry.responsibilities}</p>
+                )}
+
+                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <span>
+                    <Trans>Status</Trans>: {statusLabelMap[entry.status]}
+                  </span>
+                  {linkedResume && (
+                    <span>
+                      <Trans>Resume</Trans>: {linkedResume}
+                    </span>
+                  )}
+                  {entry.matchScore !== null && (
+                    <span>
+                      <Trans>Match</Trans>: {entry.matchScore}%
+                    </span>
+                  )}
+                </div>
+
+                {entry.matchReason && <p className="text-xs text-muted-foreground">{entry.matchReason}</p>}
+
+                <div className="flex flex-wrap gap-2">
+                  {entry.applyUrl && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        window.open(entry.applyUrl, "_blank", "noopener,noreferrer");
+                      }}
+                    >
+                      <GlobeIcon />
+                      <Trans>Open Apply Link</Trans>
+                    </Button>
+                  )}
+
+                  <Button
+                    variant="outline"
+                    disabled={!entry.resumeId || isEvaluatingId === entry.id}
+                    onClick={() => onEvaluate(entry)}
+                  >
+                    {isEvaluatingId === entry.id ? <Trans>Evaluating...</Trans> : <Trans>Evaluate Resume Match</Trans>}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <Dialog
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          setIsFormOpen(open);
+          if (!open) resetForm();
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <form
+            className="space-y-6"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSave();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{editingId ? <Trans>编辑工作记录</Trans> : <Trans>新增工作记录</Trans>}</DialogTitle>
+            </DialogHeader>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="company">
+                  <Trans>Company</Trans>
+                </Label>
+                <Input
+                  id="company"
+                  value={form.company}
+                  placeholder={t`e.g. Acme Corp`}
+                  onChange={(e) => setForm((prev) => ({ ...prev, company: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="position">
+                  <Trans>Position</Trans>
+                </Label>
+                <Input
+                  id="position"
+                  value={form.position}
+                  placeholder={t`e.g. Frontend Engineer`}
+                  onChange={(e) => setForm((prev) => ({ ...prev, position: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2 lg:col-span-2">
+                <Label htmlFor="apply-url">
+                  <Trans>Application Link</Trans>
+                </Label>
+                <Input
+                  id="apply-url"
+                  type="url"
+                  value={form.applyUrl}
+                  placeholder={t`https://...`}
+                  onChange={(e) => setForm((prev) => ({ ...prev, applyUrl: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2 lg:col-span-2">
+                <Label htmlFor="responsibilities">
+                  <Trans>Responsibilities</Trans>
+                </Label>
+                <Textarea
+                  id="responsibilities"
+                  rows={6}
+                  value={form.responsibilities}
+                  placeholder={t`Paste key requirements and responsibilities from the job post...`}
+                  onChange={(e) => setForm((prev) => ({ ...prev, responsibilities: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>
+                  <Trans>Linked Resume</Trans>
+                </Label>
+                <Combobox
+                  value={form.resumeId || null}
+                  options={resumeOptions}
+                  placeholder={t`Select a resume`}
+                  showClear
+                  onValueChange={(value) => setForm((prev) => ({ ...prev, resumeId: value ?? "" }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>
+                  <Trans>Status</Trans>
+                </Label>
+                <Combobox
+                  value={form.status}
+                  options={statusOptions}
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    setForm((prev) => ({ ...prev, status: value as WorkStatus }));
+                  }}
+                />
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="job-title">
-                <Trans>Title</Trans>
-              </Label>
-              <Input
-                id="job-title"
-                value={form.title}
-                onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                placeholder={t`e.g. Frontend Engineer`}
-              />
-            </div>
+            {formError && <p className="text-sm text-destructive">{formError}</p>}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="job-link">
-                <Trans>Link</Trans>
-              </Label>
-              <Input
-                id="job-link"
-                value={form.link}
-                onChange={(e) => setForm((prev) => ({ ...prev, link: e.target.value }))}
-                placeholder={t`https://...`}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="job-description">
-                <Trans>Description</Trans>
-              </Label>
-              <Textarea
-                id="job-description"
-                rows={6}
-                value={form.description}
-                onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                placeholder={t`Paste role responsibilities and requirements...`}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-              <Trans>Cancel</Trans>
-            </Button>
-            <Button onClick={onCreateJob}>
-              <Trans>Add Job</Trans>
-            </Button>
-          </DialogFooter>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={closeForm}>
+                <Trans>Cancel</Trans>
+              </Button>
+              <Button type="submit">
+                <Trans>确认</Trans>
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
-
-      <Sheet open={isJobDetailOpen} onOpenChange={setIsJobDetailOpen}>
-        <SheetContent className="w-full sm:max-w-2xl">
-          <SheetHeader>
-            <SheetTitle>
-              <Trans>Job Detail</Trans>
-            </SheetTitle>
-            <SheetDescription>
-              <Trans>Review role details and analyze the selected resume match.</Trans>
-            </SheetDescription>
-          </SheetHeader>
-
-          {selectedJob ? (
-            <div className="space-y-4 p-4 pt-0">
-              <JobDetail job={selectedJob} />
-
-              <MatchPanel
-                resumeId={selectedResumeId}
-                resumeOptions={resumeOptions}
-                matchResult={matchResult}
-                isAnalyzing={isAnalyzing}
-                onResumeChange={setSelectedResumeId}
-                onAnalyze={onAnalyze}
-              />
-            </div>
-          ) : (
-            <div className="p-4 text-sm text-muted-foreground">
-              <Trans>Select a job from the list to view details.</Trans>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }
 
-function extractKeywords(input: string): string[] {
-  const stopWords = new Set([
-    "with",
-    "from",
-    "that",
-    "this",
-    "have",
-    "will",
-    "your",
-    "and",
-    "the",
-    "for",
-    "you",
-    "are",
-    "our",
-    "job",
-    "role",
-  ]);
+function estimateMatch(jobTextRaw: string, resumeTextRaw: string): { score: number; reason: string } {
+  const jobWords = new Set(tokenize(jobTextRaw));
+  const resumeWords = new Set(tokenize(resumeTextRaw));
 
-  return input
+  if (jobWords.size === 0 || resumeWords.size === 0) {
+    return { score: 0, reason: t`Not enough text to compute a match score.` };
+  }
+
+  let overlap = 0;
+  for (const word of jobWords) {
+    if (resumeWords.has(word)) overlap++;
+  }
+
+  const score = Math.max(0, Math.min(100, Math.round((overlap / jobWords.size) * 100)));
+  return {
+    score,
+    reason: t`${overlap} matching keywords out of ${jobWords.size} extracted from the job record.`,
+  };
+}
+
+function tokenize(text: string): string[] {
+  const normalized = text
+    .replace(/<[^>]*>/g, " ")
     .toLowerCase()
-    .replace(/<[^>]+>/g, " ")
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ");
+
+  return normalized
     .split(/\s+/)
     .map((word) => word.trim())
-    .filter((word) => word.length >= 3 && !stopWords.has(word))
-    .filter((word, index, list) => list.indexOf(word) === index);
+    .filter((word) => word.length >= 3);
 }

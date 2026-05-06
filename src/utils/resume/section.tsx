@@ -46,6 +46,7 @@ export type RightSidebarSection =
   | "layout"
   | "typography"
   | "design"
+  | "job-analysis"
   | "page"
   | "css"
   | "notes"
@@ -118,6 +119,7 @@ export const getSectionTitle = (type: SidebarSection | CustomOnlyType): string =
       .with("layout", () => t`Layout`)
       .with("typography", () => t`Typography`)
       .with("design", () => t`Design`)
+      .with("job-analysis", () => t`Job Analysis`)
       .with("page", () => t`Page`)
       .with("css", () => t`Custom CSS`)
       .with("notes", () => t`Notes`)
@@ -161,6 +163,7 @@ export const getSectionIcon = (type: SidebarSection | CustomOnlyType, props?: Ic
       .with("layout", () => <LayoutIcon {...iconProps} />)
       .with("typography", () => <TextTIcon {...iconProps} />)
       .with("design", () => <PaletteIcon {...iconProps} />)
+      .with("job-analysis", () => <BriefcaseIcon {...iconProps} />)
       .with("page", () => <ReadCvLogoIcon {...iconProps} />)
       .with("css", () => <FileCssIcon {...iconProps} />)
       .with("notes", () => <NotepadIcon {...iconProps} />)

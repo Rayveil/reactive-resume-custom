@@ -7,6 +7,7 @@ import {
   BrainIcon,
   BriefcaseIcon,
   GearSixIcon,
+  GlobeIcon,
   KeyIcon,
   ReadCvLogoIcon,
   ShieldCheckIcon,
@@ -50,14 +51,19 @@ const appSidebarItems = [
     href: "/dashboard/resumes",
   },
   {
-    icon: <BriefcaseIcon />,
-    label: msg`Jobs`,
-    href: "/dashboard/jobs",
+    icon: <UserCircleIcon />,
+    label: msg`Personal Info`,
+    href: "/dashboard/personal",
+  },
+  {
+    icon: <GlobeIcon />,
+    label: msg`Generate Webpage`,
+    href: "/dashboard/webpage",
   },
   {
     icon: <BriefcaseIcon />,
-    label: msg`Work`,
-    href: "/dashboard/work",
+    label: msg`Jobs`,
+    href: "/dashboard/jobs",
   },
   {
     icon: <BriefcaseIcon />,

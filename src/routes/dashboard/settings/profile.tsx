@@ -4,7 +4,7 @@ import { Trans } from "@lingui/react/macro";
 import { CheckIcon, UserCircleIcon, WarningIcon } from "@phosphor-icons/react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -40,25 +40,36 @@ type FormValues = z.infer<typeof formSchema>;
 function RouteComponent() {
   const router = useRouter();
   const { session } = Route.useRouteContext();
+  const user = session?.user;
+  const hasSession = Boolean(user);
 
   const defaultValues = useMemo(() => {
     return {
-      name: session.user.name,
-      username: session.user.username,
-      email: session.user.email,
+      name: user?.name ?? "",
+      username: user?.username ?? "",
+      email: user?.email ?? "",
     };
-  }, [session.user]);
+  }, [user]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues,
   });
 
+  useEffect(() => {
+    form.reset(defaultValues);
+  }, [defaultValues, form]);
+
   const onCancel = () => {
     form.reset(defaultValues);
   };
 
   const onSubmit = async (data: FormValues) => {
+    if (!user) {
+      toast.error(t`You need to be signed in to update your profile.`);
+      return;
+    }
+
     const { error } = await authClient.updateUser({
       name: data.name,
       username: data.username,
@@ -71,10 +82,10 @@ function RouteComponent() {
     }
 
     toast.success(t`Your profile has been updated successfully.`);
-    form.reset({ name: data.name, username: data.username, email: session.user.email });
+    form.reset({ name: data.name, username: data.username, email: user.email });
     void router.invalidate();
 
-    if (data.email !== session.user.email) {
+    if (data.email !== user.email) {
       const { error } = await authClient.changeEmail({
         newEmail: data.email,
         callbackURL: "/dashboard/settings/profile",
@@ -88,16 +99,21 @@ function RouteComponent() {
       toast.success(
         t`A confirmation link has been sent to your current email address. Please check your inbox to confirm the change.`,
       );
-      form.reset({ name: data.name, username: data.username, email: session.user.email });
+      form.reset({ name: data.name, username: data.username, email: user.email });
       void router.invalidate();
     }
   };
 
   const handleResendVerificationEmail = async () => {
+    if (!user) {
+      toast.error(t`You need to be signed in to verify your email.`);
+      return;
+    }
+
     const toastId = toast.loading(t`Resending verification email...`);
 
     const { error } = await authClient.sendVerificationEmail({
-      email: session.user.email,
+      email: user.email,
       callbackURL: "/dashboard/settings/profile",
     });
 
@@ -189,28 +205,30 @@ function RouteComponent() {
                   }
                 />
                 <FormMessage />
-                {match(session.user.emailVerified)
-                  .with(true, () => (
-                    <p className="flex items-center gap-x-1.5 text-xs text-green-700">
-                      <CheckIcon />
-                      <Trans>Verified</Trans>
-                    </p>
-                  ))
-                  .with(false, () => (
-                    <p className="flex items-center gap-x-1.5 text-xs text-amber-600">
-                      <WarningIcon className="size-3.5" />
-                      <Trans>Unverified</Trans>
-                      <span>|</span>
-                      <Button
-                        variant="link"
-                        className="h-auto gap-x-1.5 p-0! text-xs text-inherit"
-                        onClick={handleResendVerificationEmail}
-                      >
-                        <Trans>Resend verification email</Trans>
-                      </Button>
-                    </p>
-                  ))
-                  .exhaustive()}
+                {hasSession
+                  ? match(user.emailVerified)
+                      .with(true, () => (
+                        <p className="flex items-center gap-x-1.5 text-xs text-green-700">
+                          <CheckIcon />
+                          <Trans>Verified</Trans>
+                        </p>
+                      ))
+                      .with(false, () => (
+                        <p className="flex items-center gap-x-1.5 text-xs text-amber-600">
+                          <WarningIcon className="size-3.5" />
+                          <Trans>Unverified</Trans>
+                          <span>|</span>
+                          <Button
+                            variant="link"
+                            className="h-auto gap-x-1.5 p-0! text-xs text-inherit"
+                            onClick={handleResendVerificationEmail}
+                          >
+                            <Trans>Resend verification email</Trans>
+                          </Button>
+                        </p>
+                      ))
+                      .exhaustive()
+                  : null}
               </FormItem>
             )}
           />

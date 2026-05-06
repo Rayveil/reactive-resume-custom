@@ -3277,3 +3277,20 @@ msgstr "জুম আউট"
 msgid "Zulu"
 msgstr "জুলু"
 
+
+#: src/dialogs/resume/index.tsx
+msgid "Personal information"
+msgstr "Personal information"
+
+#: src/dialogs/resume/index.tsx
+msgid "This information will be saved in the new resume and can be reused later."
+msgstr "This information will be saved in the new resume and can be reused later."
+
+#: src/dialogs/resume/index.tsx
+msgid "Start with a title, then save the personal details you want to reuse later."
+msgstr "Start with a title, then save the personal details you want to reuse later."
+
+#: src/dialogs/resume/index.tsx
+msgid "Full Name"
+msgstr "Full Name"
+

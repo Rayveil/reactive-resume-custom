@@ -41,24 +41,90 @@ async function getUserFromApiKey(apiKey: string): Promise<User | null> {
   }
 }
 
+// In-memory fallback dev user for when database is unavailable
+let cachedDevUser: User | null = null;
+
+async function getOrCreateDevelopmentGuestUser(): Promise<User | null> {
+  if (process.env.NODE_ENV !== "development") return null;
+
+  const devGuest = {
+    name: "Development Guest",
+    email: "dev-guest@reactive-resume.local",
+    username: "devguest",
+    displayUsername: "devguest",
+  };
+
+  try {
+    const [existingUser] = await db.select().from(user).where(eq(user.email, devGuest.email)).limit(1);
+    if (existingUser) {
+      cachedDevUser = existingUser;
+      return existingUser;
+    }
+
+    const [createdUser] = await db.insert(user).values(devGuest).returning();
+    if (createdUser) {
+      cachedDevUser = createdUser;
+      return createdUser;
+    }
+    return null;
+  } catch {
+    // If database is unavailable, use in-memory cached dev user
+    if (cachedDevUser) return cachedDevUser;
+
+    // Create a minimal virtual user for development without database
+    cachedDevUser = {
+      id: "dev-guest-virtual-" + Date.now(),
+      image: null,
+      name: devGuest.name,
+      email: devGuest.email,
+      emailVerified: false,
+      username: devGuest.username,
+      displayUsername: devGuest.displayUsername,
+      twoFactorEnabled: false,
+      lastActiveAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as User;
+
+    return cachedDevUser;
+  }
+}
+
 const base = os.$context<ORPCContext>();
 
 export const publicProcedure = base.use(async ({ context, next }) => {
   const headers = context.reqHeaders ?? new Headers();
   const apiKey = headers.get("x-api-key");
 
-  const user = apiKey ? await getUserFromApiKey(apiKey) : await getUserFromHeaders(headers);
+  const authenticatedUser = apiKey ? await getUserFromApiKey(apiKey) : await getUserFromHeaders(headers);
+  const currentUser = authenticatedUser ?? (await getOrCreateDevelopmentGuestUser());
 
   return next({
     context: {
       ...context,
-      user: user ?? null,
+      user: currentUser ?? null,
     },
   });
 });
 
 export const protectedProcedure = publicProcedure.use(async ({ context, next }) => {
   if (!context.user) throw new ORPCError("UNAUTHORIZED");
+
+  return next({
+    context: {
+      ...context,
+      user: context.user,
+    },
+  });
+});
+
+/**
+ * Protected in production, relaxed in development to support local guest flows.
+ */
+export const protectedProcedureInProduction = publicProcedure.use(async ({ context, next }) => {
+  if (!context.user && process.env.NODE_ENV !== "development") {
+    throw new ORPCError("UNAUTHORIZED");
+  }
 
   return next({
     context: {

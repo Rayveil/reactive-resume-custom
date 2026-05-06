@@ -42,9 +42,10 @@ export const Route = createFileRoute("/builder/$resumeId")({
 
 function RouteComponent() {
   const { layout: initialLayout } = Route.useLoaderData();
-
   const { resumeId } = Route.useParams();
-  const { data: resume } = useSuspenseQuery(orpc.resume.getById.queryOptions({ input: { id: resumeId } }));
+
+  const queryOptions = orpc.resume.getById.queryOptions({ input: { id: resumeId } });
+  const { data: resume } = useSuspenseQuery(queryOptions);
 
   const style = useCSSVariables(resume.data);
   const isReady = useResumeStore((state) => state.isReady);

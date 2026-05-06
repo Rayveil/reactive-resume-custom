@@ -1,6 +1,13 @@
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { BrainIcon, CheckCircleIcon, DownloadSimpleIcon, InfoIcon, UploadSimpleIcon, XCircleIcon } from "@phosphor-icons/react";
+import {
+  BrainIcon,
+  CheckCircleIcon,
+  DownloadSimpleIcon,
+  InfoIcon,
+  UploadSimpleIcon,
+  XCircleIcon,
+} from "@phosphor-icons/react";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "motion/react";
@@ -61,7 +68,7 @@ const providerOptions: (ComboboxOption<AIProvider> & { defaultBaseURL: string })
     value: "qwen",
     label: "Alibaba Qwen (千问)",
     keywords: ["qwen", "alibaba", "千问", "阿里"],
-    defaultBaseURL: "https://dashscope.aliyuncs.com/api/v1",
+    defaultBaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
   },
   {
     value: "deepseek",
@@ -255,13 +262,7 @@ function AIForm() {
       </div>
 
       {/* 隐藏的文件输入 */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json"
-        onChange={handleFileSelect}
-        className="hidden"
-      />
+      <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileSelect} className="hidden" />
     </div>
   );
 }

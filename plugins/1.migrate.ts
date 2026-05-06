@@ -20,7 +20,15 @@ async function migrateDatabase() {
     console.info("Database migrations completed");
   } catch (error) {
     console.error({ err: error }, "Database migrations failed");
-    throw error;
+
+    // In development, warn but don't crash if DB connection fails
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        "⚠️  Development mode: Continuing without database. AI features may work, but resume saving will fail.",
+      );
+    } else {
+      throw error;
+    }
   } finally {
     await pool.end();
   }

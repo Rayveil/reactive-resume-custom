@@ -169,6 +169,14 @@ export function ImportResumeDialog(_: DialogProps<"resume.import">) {
         if (!isAIEnabled)
           throw new Error(t`This feature requires AI Integration to be enabled. Please enable it in the settings.`);
 
+        const usesLocalExtraction = provider === "deepseek" || provider === "qwen";
+
+        if (usesLocalExtraction && values.file.type === "application/msword") {
+          throw new Error(
+            t`DOC files are not supported for local text extraction yet. Please convert the file to DOCX first.`,
+          );
+        }
+
         // const arrayBuffer = await values.file.arrayBuffer();
         const base64 = await fileToBase64(values.file);
 
