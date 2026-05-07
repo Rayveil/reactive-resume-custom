@@ -1,4 +1,5 @@
 import { aiRouter } from "./ai";
+import { applicationsRouter } from "./applications";
 import { authRouter } from "./auth";
 import { flagsRouter } from "./flags";
 import { jobsRouter } from "./jobs";
@@ -9,6 +10,7 @@ import { storageRouter } from "./storage";
 
 export default {
   ai: aiRouter,
+  applications: applicationsRouter,
   auth: authRouter,
   flags: flagsRouter,
   jobs: jobsRouter,

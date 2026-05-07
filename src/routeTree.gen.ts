@@ -34,6 +34,7 @@ import { Route as DashboardResumesIndexRouteImport } from "./routes/dashboard/re
 import { Route as DashboardPersonalIndexRouteImport } from "./routes/dashboard/personal/index";
 import { Route as DashboardJobsIndexRouteImport } from "./routes/dashboard/jobs/index";
 import { Route as DashboardJobSearchIndexRouteImport } from "./routes/dashboard/job-search/index";
+import { Route as DashboardApplicationsIndexRouteImport } from "./routes/dashboard/applications/index";
 import { Route as BuilderResumeIdIndexRouteImport } from "./routes/builder/$resumeId/index";
 import { Route as UploadsUserIdSplatRouteImport } from "./routes/uploads/$userId.$";
 import { Route as DashboardSettingsProfileRouteImport } from "./routes/dashboard/settings/profile";
@@ -171,6 +172,12 @@ const DashboardJobSearchIndexRoute = DashboardJobSearchIndexRouteImport.update({
   path: "/job-search/",
   getParentRoute: () => DashboardRouteRoute,
 } as any);
+const DashboardApplicationsIndexRoute =
+  DashboardApplicationsIndexRouteImport.update({
+    id: "/applications/",
+    path: "/applications/",
+    getParentRoute: () => DashboardRouteRoute,
+  } as any);
 const BuilderResumeIdIndexRoute = BuilderResumeIdIndexRouteImport.update({
   id: "/",
   path: "/",
@@ -269,6 +276,7 @@ export interface FileRoutesByFullPath {
   "/dashboard/settings/profile": typeof DashboardSettingsProfileRoute;
   "/uploads/$userId/$": typeof UploadsUserIdSplatRoute;
   "/builder/$resumeId/": typeof BuilderResumeIdIndexRoute;
+  "/dashboard/applications/": typeof DashboardApplicationsIndexRoute;
   "/dashboard/job-search/": typeof DashboardJobSearchIndexRoute;
   "/dashboard/jobs/": typeof DashboardJobsIndexRoute;
   "/dashboard/personal/": typeof DashboardPersonalIndexRoute;
@@ -304,6 +312,7 @@ export interface FileRoutesByTo {
   "/dashboard/settings/profile": typeof DashboardSettingsProfileRoute;
   "/uploads/$userId/$": typeof UploadsUserIdSplatRoute;
   "/builder/$resumeId": typeof BuilderResumeIdIndexRoute;
+  "/dashboard/applications": typeof DashboardApplicationsIndexRoute;
   "/dashboard/job-search": typeof DashboardJobSearchIndexRoute;
   "/dashboard/jobs": typeof DashboardJobsIndexRoute;
   "/dashboard/personal": typeof DashboardPersonalIndexRoute;
@@ -344,6 +353,7 @@ export interface FileRoutesById {
   "/dashboard/settings/profile": typeof DashboardSettingsProfileRoute;
   "/uploads/$userId/$": typeof UploadsUserIdSplatRoute;
   "/builder/$resumeId/": typeof BuilderResumeIdIndexRoute;
+  "/dashboard/applications/": typeof DashboardApplicationsIndexRoute;
   "/dashboard/job-search/": typeof DashboardJobSearchIndexRoute;
   "/dashboard/jobs/": typeof DashboardJobsIndexRoute;
   "/dashboard/personal/": typeof DashboardPersonalIndexRoute;
@@ -384,6 +394,7 @@ export interface FileRouteTypes {
     | "/dashboard/settings/profile"
     | "/uploads/$userId/$"
     | "/builder/$resumeId/"
+    | "/dashboard/applications/"
     | "/dashboard/job-search/"
     | "/dashboard/jobs/"
     | "/dashboard/personal/"
@@ -419,6 +430,7 @@ export interface FileRouteTypes {
     | "/dashboard/settings/profile"
     | "/uploads/$userId/$"
     | "/builder/$resumeId"
+    | "/dashboard/applications"
     | "/dashboard/job-search"
     | "/dashboard/jobs"
     | "/dashboard/personal"
@@ -458,6 +470,7 @@ export interface FileRouteTypes {
     | "/dashboard/settings/profile"
     | "/uploads/$userId/$"
     | "/builder/$resumeId/"
+    | "/dashboard/applications/"
     | "/dashboard/job-search/"
     | "/dashboard/jobs/"
     | "/dashboard/personal/"
@@ -659,6 +672,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof DashboardJobSearchIndexRouteImport;
       parentRoute: typeof DashboardRouteRoute;
     };
+    "/dashboard/applications/": {
+      id: "/dashboard/applications/";
+      path: "/applications";
+      fullPath: "/dashboard/applications/";
+      preLoaderRoute: typeof DashboardApplicationsIndexRouteImport;
+      parentRoute: typeof DashboardRouteRoute;
+    };
     "/builder/$resumeId/": {
       id: "/builder/$resumeId/";
       path: "/";
@@ -793,6 +813,7 @@ interface DashboardRouteRouteChildren {
   DashboardSettingsJobSearchRoute: typeof DashboardSettingsJobSearchRoute;
   DashboardSettingsPreferencesRoute: typeof DashboardSettingsPreferencesRoute;
   DashboardSettingsProfileRoute: typeof DashboardSettingsProfileRoute;
+  DashboardApplicationsIndexRoute: typeof DashboardApplicationsIndexRoute;
   DashboardJobSearchIndexRoute: typeof DashboardJobSearchIndexRoute;
   DashboardJobsIndexRoute: typeof DashboardJobsIndexRoute;
   DashboardPersonalIndexRoute: typeof DashboardPersonalIndexRoute;
@@ -810,6 +831,7 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardSettingsJobSearchRoute: DashboardSettingsJobSearchRoute,
   DashboardSettingsPreferencesRoute: DashboardSettingsPreferencesRoute,
   DashboardSettingsProfileRoute: DashboardSettingsProfileRoute,
+  DashboardApplicationsIndexRoute: DashboardApplicationsIndexRoute,
   DashboardJobSearchIndexRoute: DashboardJobSearchIndexRoute,
   DashboardJobsIndexRoute: DashboardJobsIndexRoute,
   DashboardPersonalIndexRoute: DashboardPersonalIndexRoute,
