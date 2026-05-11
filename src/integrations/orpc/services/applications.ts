@@ -1,4 +1,5 @@
-import { createORPCMsw } from "@orpc/server";
+// Note: createORPCMsw was removed because it's not exported by @orpc/server
+// This file provides procedures consumed by the router layer.
 import { z } from "zod";
 
 import type { ApplicationRecord, ApplicationSession, JobPosting, UserProfile } from "@/schema/job-applications";
@@ -30,6 +31,7 @@ const JobPostingInputSchema = z.object({
   description: z.string(),
   url: z.string().url().optional(),
   location: z.string().optional(),
+  currentResumeText: z.string().optional(),
   aiCredentials: AICredentialsSchema,
 });
 
@@ -38,6 +40,8 @@ const AnalyzeJobResponseSchema = z.object({
   currentStep: z.string(),
   parsedJD: z.any().optional(),
   matchAnalysis: z.any().optional(),
+  hrReview: z.any().optional(),
+  candidateRevision: z.any().optional(),
   createdAt: z.string(),
 });
 
@@ -126,7 +130,12 @@ export const applicationsProcedures = {
         const orchestrator = createApplicationOrchestrator(config);
 
         // 执行应用工作流
-        const session = await orchestrator.executeApplicationWorkflow(userProfile.id, jobPosting, userProfile);
+        const session = await orchestrator.executeApplicationWorkflow(
+          userProfile.id,
+          jobPosting,
+          userProfile,
+          input.currentResumeText,
+        );
 
         // 返回结果
         return {
@@ -134,6 +143,8 @@ export const applicationsProcedures = {
           currentStep: session.currentStep,
           parsedJD: session.results.parsedJD,
           matchAnalysis: session.results.matchAnalysis,
+          hrReview: session.results.hrReview,
+          candidateRevision: session.results.candidateRevision,
           createdAt: session.createdAt,
         };
       } catch (error) {
@@ -248,14 +259,5 @@ export const applicationsProcedures = {
 
 // ===== 创建路由器 =====
 
-export function createApplicationsRouter() {
-  const procedures = Object.entries(applicationsProcedures).reduce(
-    (acc, [key, value]) => {
-      acc[key] = value();
-      return acc;
-    },
-    {} as Record<string, any>,
-  );
-
-  return createORPCMsw(procedures);
-}
+// The router layer imports `applicationsProcedures` and wraps them
+// into route handlers. No runtime router creation is performed here.

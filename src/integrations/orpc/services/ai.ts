@@ -28,8 +28,8 @@ import docxParserUserPrompt from "@/integrations/ai/prompts/docx-parser-user.md?
 import jobMatchSystemPromptTemplate from "@/integrations/ai/prompts/job-match-system.md?raw";
 import pdfParserSystemPrompt from "@/integrations/ai/prompts/pdf-parser-system.md?raw";
 import pdfParserUserPrompt from "@/integrations/ai/prompts/pdf-parser-user.md?raw";
-import webpageGeneratorSystemPromptTemplate from "@/integrations/ai/prompts/webpage-generator-system.md?raw";
 import tailorSystemPromptTemplate from "@/integrations/ai/prompts/tailor-system.md?raw";
+import webpageGeneratorSystemPromptTemplate from "@/integrations/ai/prompts/webpage-generator-system.md?raw";
 import {
   executePatchResume,
   patchResumeDescription,
@@ -45,6 +45,10 @@ import {
 } from "@/schema/job-match";
 import { defaultResumeData, resumeDataSchema } from "@/schema/resume/data";
 import { type TailorOutput, tailorOutputSchema } from "@/schema/tailor";
+import {
+  ResumeInfoExtractionAgent,
+  type ResumeExtractionAgentOutput,
+} from "@/services/agents/resume-info-extraction-agent";
 import { scoreJobMatch } from "@/utils/job-match";
 import { isObject } from "@/utils/sanitize";
 
@@ -549,29 +553,38 @@ async function parseResumeFromExtractedText({
 }
 
 async function parsePdf(input: ParsePdfInput): Promise<ResumeData> {
-  if (supportsLocalResumeTextExtraction(input.provider)) {
-    return parseResumeFromExtractedText({
-      model: getModel(input),
-      file: input.file,
-      mediaType: "application/pdf",
-      systemPrompt: pdfParserSystemPrompt,
-      userPrompt: pdfParserUserPrompt,
-    });
-  }
+  const output = await parsePdfAsAgentOutput(input);
+  return output.data;
+}
 
-  const model = getModel(input);
+async function parsePdfAsAgentOutput(input: ParsePdfInput): Promise<ResumeExtractionAgentOutput> {
+  const agent = new ResumeInfoExtractionAgent();
 
-  const result = await generateText({
-    model,
-    messages: buildResumeParsingMessages({
-      systemPrompt: pdfParserSystemPrompt,
-      userPrompt: pdfParserUserPrompt,
-      file: input.file,
-      mediaType: "application/pdf",
-    }),
-  }).catch((error: unknown) => logAndRethrow("Failed to generate the text with the model", error));
+  return await agent.extract("pdf_upload", async () => {
+    if (supportsLocalResumeTextExtraction(input.provider)) {
+      return parseResumeFromExtractedText({
+        model: getModel(input),
+        file: input.file,
+        mediaType: "application/pdf",
+        systemPrompt: pdfParserSystemPrompt,
+        userPrompt: pdfParserUserPrompt,
+      });
+    }
 
-  return parseAndValidateResumeJson(result.text);
+    const model = getModel(input);
+
+    const result = await generateText({
+      model,
+      messages: buildResumeParsingMessages({
+        systemPrompt: pdfParserSystemPrompt,
+        userPrompt: pdfParserUserPrompt,
+        file: input.file,
+        mediaType: "application/pdf",
+      }),
+    }).catch((error: unknown) => logAndRethrow("Failed to generate the text with the model", error));
+
+    return parseAndValidateResumeJson(result.text);
+  });
 }
 
 type ParseDocxInput = z.infer<typeof aiCredentialsSchema> & {
@@ -580,35 +593,44 @@ type ParseDocxInput = z.infer<typeof aiCredentialsSchema> & {
 };
 
 async function parseDocx(input: ParseDocxInput): Promise<ResumeData> {
-  if (supportsLocalResumeTextExtraction(input.provider)) {
-    if (input.mediaType === "application/msword") {
-      throw new Error(
-        "DeepSeek and Qwen direct import currently support DOCX files only. Please convert the DOC file to DOCX first.",
-      );
+  const output = await parseDocxAsAgentOutput(input);
+  return output.data;
+}
+
+async function parseDocxAsAgentOutput(input: ParseDocxInput): Promise<ResumeExtractionAgentOutput> {
+  const agent = new ResumeInfoExtractionAgent();
+
+  return await agent.extract("docx_upload", async () => {
+    if (supportsLocalResumeTextExtraction(input.provider)) {
+      if (input.mediaType === "application/msword") {
+        throw new Error(
+          "DeepSeek and Qwen direct import currently support DOCX files only. Please convert the DOC file to DOCX first.",
+        );
+      }
+
+      return parseResumeFromExtractedText({
+        model: getModel(input),
+        file: input.file,
+        mediaType: input.mediaType,
+        systemPrompt: docxParserSystemPrompt,
+        userPrompt: docxParserUserPrompt,
+      });
     }
 
-    return parseResumeFromExtractedText({
-      model: getModel(input),
-      file: input.file,
-      mediaType: input.mediaType,
-      systemPrompt: docxParserSystemPrompt,
-      userPrompt: docxParserUserPrompt,
-    });
-  }
+    const model = getModel(input);
 
-  const model = getModel(input);
+    const result = await generateText({
+      model,
+      messages: buildResumeParsingMessages({
+        systemPrompt: docxParserSystemPrompt,
+        userPrompt: docxParserUserPrompt,
+        file: input.file,
+        mediaType: input.mediaType,
+      }),
+    }).catch((error: unknown) => logAndRethrow("Failed to generate the text with the model", error));
 
-  const result = await generateText({
-    model,
-    messages: buildResumeParsingMessages({
-      systemPrompt: docxParserSystemPrompt,
-      userPrompt: docxParserUserPrompt,
-      file: input.file,
-      mediaType: input.mediaType,
-    }),
-  }).catch((error: unknown) => logAndRethrow("Failed to generate the text with the model", error));
-
-  return parseAndValidateResumeJson(result.text);
+    return parseAndValidateResumeJson(result.text);
+  });
 }
 
 function buildChatSystemPrompt(resumeData: ResumeData): string {
@@ -820,7 +842,9 @@ export const aiService = {
   chat,
   buildWebpageGeneratorSystemPrompt,
   matchJobCv,
+  parseDocxAsAgentOutput,
   parseDocx,
+  parsePdfAsAgentOutput,
   parsePdf,
   tailorResume,
   testConnection,

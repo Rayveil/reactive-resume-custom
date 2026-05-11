@@ -266,6 +266,8 @@ export const applicationRecordStorage = {
   clear: (): boolean => removeItem(KEYS.APPLICATION_RECORDS),
 };
 
+export const LocalApplicationStorage = applicationRecordStorage;
+
 // ===== 应用会话存储 =====
 
 export const applicationSessionStorage = {
@@ -377,3 +379,85 @@ export function clearAllApplicationData(): boolean {
   }
   return allCleared;
 }
+
+// ===== Export类型别名 =====
+
+export type ApplicationExport = typeof ApplicationExportUtil;
+
+// ===== 应用导出工具 =====
+
+export const ApplicationExportUtil = {
+  downloadJSON: (records: ApplicationRecord[], filename: string) => {
+    const data = JSON.stringify(records, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  },
+
+  downloadCSV: (records: ApplicationRecord[], filename: string) => {
+    if (records.length === 0) {
+      alert("No records to export");
+      return;
+    }
+
+    const headers = ["ID", "Job Title", "Company", "Status", "Match Score", "Created Date", "Applied Date"];
+    const rows = records.map((r) => [
+      r.id,
+      r.jobPosting?.title || "",
+      r.jobPosting?.company || "",
+      r.status,
+      r.resumeMatchAssessment?.overallScore || "",
+      new Date(r.createdAt).toLocaleDateString(),
+      r.appliedAt ? new Date(r.appliedAt).toLocaleDateString() : "",
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((r) => r.map((v) => `"${v}"`).join(","))].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  },
+};
+
+// 为了向后兼容，导出为 ApplicationExport
+export const ApplicationExport = ApplicationExportUtil;
+
+// ===== 本地应用存储类 =====
+
+export const LocalApplicationStorage = {
+  delete: (id: string): boolean => {
+    return applicationRecordStorage.delete(id);
+  },
+
+  update: (id: string, updates: Partial<ApplicationRecord>): boolean => {
+    return applicationRecordStorage.update(id, updates);
+  },
+
+  get: (id: string): ApplicationRecord | null => {
+    return applicationRecordStorage.get(id);
+  },
+
+  getAll: (): ApplicationRecord[] => {
+    return applicationRecordStorage.getAll();
+  },
+
+  add: (record: ApplicationRecord): boolean => {
+    return applicationRecordStorage.add(record);
+  },
+
+  clear: (): boolean => {
+    return applicationRecordStorage.clear();
+  },
+};

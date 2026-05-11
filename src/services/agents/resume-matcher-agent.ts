@@ -267,33 +267,4 @@ export function createResumeMatcherAgent(config?: MatchAnalyzerConfig): ResumeMa
 }
 
 // ===== 辅助函数（需要从 job-match.ts 导入或定义）=====
-
-function cosineSimilarity(leftTokens: string[], rightTokens: string[]): number {
-  if (leftTokens.length === 0 || rightTokens.length === 0) return 0;
-
-  const left = new Map<string, number>();
-  const right = new Map<string, number>();
-
-  for (const token of leftTokens) {
-    left.set(token, (left.get(token) ?? 0) + 1);
-  }
-  for (const token of rightTokens) {
-    right.set(token, (right.get(token) ?? 0) + 1);
-  }
-
-  const allTokens = new Set([...left.keys(), ...right.keys()]);
-  let dotProduct = 0;
-  let leftMagnitude = 0;
-  let rightMagnitude = 0;
-
-  for (const token of allTokens) {
-    const lv = left.get(token) ?? 0;
-    const rv = right.get(token) ?? 0;
-    dotProduct += lv * rv;
-    leftMagnitude += lv * lv;
-    rightMagnitude += rv * rv;
-  }
-
-  if (leftMagnitude === 0 || rightMagnitude === 0) return 0;
-  return dotProduct / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude));
-}
+// Use shared helpers from utils/job-match-helpers

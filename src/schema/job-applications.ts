@@ -187,6 +187,57 @@ export const optimizedResumeSchema = z.object({
 export type OptimizedResume = z.infer<typeof optimizedResumeSchema>;
 
 // ===== 评分结果 =====
+// ===== 优化建议 =====
+
+export const optimizationSuggestionSchema = z.object({
+  id: z.string(),
+  category: z.enum(["skills", "experience", "education", "keywords", "formatting", "content"]),
+  priority: z.enum(["high", "medium", "low"]),
+  title: z.string(),
+  description: z.string(),
+  actionItems: z.array(z.string()).optional(),
+  impactScore: z.number().min(0).max(100).optional(),
+});
+
+export type OptimizationSuggestion = z.infer<typeof optimizationSuggestionSchema>;
+
+// ===== HR 审核结果 =====
+
+export const hrReviewSchema = z.object({
+  id: z.string(),
+  jobId: z.string(),
+  userId: z.string(),
+  decision: z.enum(["reject", "optimize", "pass"]),
+  score: z.number().min(0).max(100),
+  reliability: z.number().min(0).max(100),
+  summary: z.string(),
+  blockingReasons: z.array(z.string()),
+  improvementPoints: z.array(z.string()),
+  suggestedChanges: z.array(z.string()),
+  reviewedAt: z.date().transform((d) => d.toISOString()),
+});
+
+export type HRReview = z.infer<typeof hrReviewSchema>;
+
+// ===== 候选人辅助修改结果 =====
+
+export const candidateRevisionSchema = z.object({
+  id: z.string(),
+  jobId: z.string(),
+  userId: z.string(),
+  confidence: z.number().min(0).max(100),
+  status: z.enum(["accepted", "needs_input", "rejected"]),
+  message: z.string(),
+  revisedSummary: z.string().optional(),
+  revisedHeadline: z.string().optional(),
+  revisionNotes: z.array(z.string()),
+  userApprovalQuestion: z.string(),
+  createdAt: z.date().transform((d) => d.toISOString()),
+});
+
+export type CandidateRevision = z.infer<typeof candidateRevisionSchema>;
+
+// ===== 评分结果 =====
 
 export const evaluationResultSchema = z.object({
   id: z.string(),
@@ -237,9 +288,12 @@ export const applicationSessionSchema = z.object({
   results: z.object({
     parsedJD: parsedJDSchema.optional(),
     matchAnalysis: matchAnalysisSchema.optional(),
+    hrReview: hrReviewSchema.optional(),
+    candidateRevision: candidateRevisionSchema.optional(),
     optimizedResume: optimizedResumeSchema.optional(),
     evaluation: evaluationResultSchema.optional(),
     applicationRecord: applicationRecordSchema.optional(),
+    optimizationSuggestions: z.array(optimizationSuggestionSchema).optional(),
   }),
   errors: z.array(z.string()).optional(),
   createdAt: z.date().transform((d) => d.toISOString()),

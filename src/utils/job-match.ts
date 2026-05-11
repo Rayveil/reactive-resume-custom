@@ -6,6 +6,8 @@ import type {
   JobMatchWeights,
 } from "@/schema/job-match";
 
+import { tokenizeJobMatchText, cosineSimilarity, jaccardSimilarity } from "@/utils/job-match-helpers";
+
 const DEFAULT_WEIGHTS: JobMatchWeights = {
   skills: 0.45,
   experience: 0.35,
@@ -74,62 +76,7 @@ export function normalizeJobMatchText(text: string): string {
     .trim();
 }
 
-export function tokenizeJobMatchText(text: string): string[] {
-  return normalizeJobMatchText(text)
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length > 1 && !STOP_WORDS.has(token));
-}
-
-function buildFrequencyMap(tokens: string[]): Map<string, number> {
-  const frequencies = new Map<string, number>();
-
-  for (const token of tokens) {
-    frequencies.set(token, (frequencies.get(token) ?? 0) + 1);
-  }
-
-  return frequencies;
-}
-
-function cosineSimilarity(leftTokens: string[], rightTokens: string[]): number {
-  if (leftTokens.length === 0 || rightTokens.length === 0) return 0;
-
-  const left = buildFrequencyMap(leftTokens);
-  const right = buildFrequencyMap(rightTokens);
-  const sharedTokens = new Set([...left.keys(), ...right.keys()]);
-
-  let dotProduct = 0;
-  let leftMagnitude = 0;
-  let rightMagnitude = 0;
-
-  for (const token of sharedTokens) {
-    const leftValue = left.get(token) ?? 0;
-    const rightValue = right.get(token) ?? 0;
-    dotProduct += leftValue * rightValue;
-    leftMagnitude += leftValue * leftValue;
-    rightMagnitude += rightValue * rightValue;
-  }
-
-  if (leftMagnitude === 0 || rightMagnitude === 0) return 0;
-
-  return dotProduct / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude));
-}
-
-function jaccardSimilarity(leftValues: string[], rightValues: string[]): number {
-  const left = new Set(leftValues.map((value) => normalizeJobMatchText(value)).filter(Boolean));
-  const right = new Set(rightValues.map((value) => normalizeJobMatchText(value)).filter(Boolean));
-
-  if (left.size === 0 || right.size === 0) return 0;
-
-  let intersection = 0;
-
-  for (const value of left) {
-    if (right.has(value)) intersection += 1;
-  }
-
-  const union = new Set([...left, ...right]).size;
-  return union === 0 ? 0 : intersection / union;
-}
+// Tokenization and similarity helpers are provided by utils/job-match-helpers
 
 function isSkillLike(category: JobMatchItemCategory): boolean {
   return category === "skill" || category === "project" || category === "other";

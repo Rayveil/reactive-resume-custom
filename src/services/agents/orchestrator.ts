@@ -7,6 +7,8 @@ import type {
   UserProfile,
   EvaluationResult,
   ApplicationRecord,
+  HRReview,
+  CandidateRevision,
 } from "@/schema/job-applications";
 
 import {
@@ -18,8 +20,11 @@ import {
   applicationRecordStorage,
 } from "@/services/application-storage";
 
+import { createResumeRewriteAssistantAgent } from "./candidate-helper-agent";
+import { createHRReviewAgent } from "./hr-review-agent";
 import { JDParserAgent } from "./jd-parser-agent";
 import { ResumeMatcherAgent } from "./resume-matcher-agent";
+import { createResumeOptimizerAgent } from "./resume-optimizer-agent";
 
 export interface AICredentials {
   provider: string;
@@ -41,6 +46,10 @@ export class ApplicationOrchestrator {
   private config: OrchestratorConfig;
   private jdParserAgent: JDParserAgent;
   private resumeMatcherAgent: ResumeMatcherAgent;
+  private hrReviewAgent = createHRReviewAgent();
+  private resumeRewriteAssistantAgent = createResumeRewriteAssistantAgent();
+
+  private resumeOptimizerAgent: ReturnType<typeof createResumeOptimizerAgent>;
 
   constructor(config: OrchestratorConfig) {
     this.config = {
@@ -52,6 +61,7 @@ export class ApplicationOrchestrator {
     // Pass AI credentials to agents
     this.jdParserAgent = new JDParserAgent(config.aiCredentials);
     this.resumeMatcherAgent = new ResumeMatcherAgent();
+    this.resumeOptimizerAgent = createResumeOptimizerAgent(config.aiCredentials);
   }
 
   /**
@@ -83,6 +93,7 @@ export class ApplicationOrchestrator {
     userId: string,
     jobPosting: JobPosting,
     userProfile: UserProfile,
+    currentResumeText?: string,
   ): Promise<ApplicationSession> {
     // 1. 创建会话
     let session = await this.createApplicationSession(userId, jobPosting, userProfile);
@@ -104,17 +115,32 @@ export class ApplicationOrchestrator {
         throw new Error("Failed to analyze match");
       }
 
-      // Step 3: 根据匹配度决定是否生成优化简历
-      if (session.results.matchAnalysis.overallScore < 70) {
-        console.log(`[Agent Orchestrator] Step 3: Generating optimized resume (low score)`);
+      // Step 3: HR 审核
+      console.log(`[Agent Orchestrator] Step 3: HR review for job ${jobPosting.id}`);
+      session = await this.runHrReviewStep(session, userProfile, currentResumeText);
+
+      if (!session.results.hrReview) {
+        throw new Error("Failed to review by HR agent");
+      }
+
+      // Step 4: 简历修改助手生成修改方案
+      console.log(`[Agent Orchestrator] Step 4: Resume rewrite assistant revision for job ${jobPosting.id}`);
+      session = await this.runResumeRewriteAssistantStep(session, userProfile, currentResumeText);
+
+      if (!session.results.candidateRevision) {
+        throw new Error("Failed to generate resume rewrite assistant revision");
+      }
+
+      // Step 5: 根据 HR 结果决定是否生成优化简历
+      if (session.results.hrReview.decision !== "reject") {
+        console.log(`[Agent Orchestrator] Step 5: Generating optimized resume`);
         session = await this.runGenerateStep(session, userProfile, jobPosting);
       } else {
-        console.log(`[Agent Orchestrator] Step 3: Skipping generation (high match score)`);
-        // 创建最小化的优化简历
+        console.log(`[Agent Orchestrator] Step 5: Skipping generation (HR reject)`);
         session.results.optimizedResume = this.createMinimalOptimizedResume(session.results.parsedJD!, userProfile);
       }
 
-      // Step 4: 评分
+      // Step 6: 评分
       console.log(`[Agent Orchestrator] Step 4: Evaluating resume`);
       session = await this.runEvaluateStep(session);
 
@@ -132,6 +158,55 @@ export class ApplicationOrchestrator {
       applicationSessionStorage.update(session.id, session);
       throw error;
     }
+  }
+
+  private async runHrReviewStep(
+    session: ApplicationSession,
+    userProfile: UserProfile,
+    currentResumeText?: string,
+  ): Promise<ApplicationSession> {
+    if (!session.results.parsedJD || !session.results.matchAnalysis) {
+      throw new Error("Required data not available for HR review");
+    }
+
+    const review = await this.withTimeout(
+      this.hrReviewAgent.review(userProfile, session.results.parsedJD, session.results.matchAnalysis.overallScore, {
+        jobId: session.jobId,
+        userId: userProfile.id,
+        currentResumeText,
+      }),
+      this.config.timeoutMs,
+    );
+
+    session.results.hrReview = review as HRReview;
+    session.currentStep = "generate";
+    session.updatedAt = new Date().toISOString();
+    applicationSessionStorage.update(session.id, session);
+    return session;
+  }
+
+  private async runResumeRewriteAssistantStep(
+    session: ApplicationSession,
+    userProfile: UserProfile,
+    currentResumeText?: string,
+  ): Promise<ApplicationSession> {
+    if (!session.results.parsedJD || !session.results.hrReview) {
+      throw new Error("Required data not available for resume rewrite assistant");
+    }
+
+    const revision = await this.withTimeout(
+      this.resumeRewriteAssistantAgent.buildRevision(userProfile, session.results.parsedJD, session.results.hrReview, {
+        jobId: session.jobId,
+        userId: userProfile.id,
+        currentResumeText,
+      }),
+      this.config.timeoutMs,
+    );
+
+    session.results.candidateRevision = revision as CandidateRevision;
+    session.updatedAt = new Date().toISOString();
+    applicationSessionStorage.update(session.id, session);
+    return session;
   }
 
   /**
@@ -199,11 +274,21 @@ export class ApplicationOrchestrator {
     }
 
     try {
-      // TODO: 实现真实的简历生成 Agent
-      const optimized = this.createMinimalOptimizedResume(session.results.parsedJD, userProfile);
+      // Use ResumeOptimizerAgent to generate optimized resume
+      const optimized = await this.withTimeout(
+        this.resumeOptimizerAgent.optimizeResumeForJob(userProfile, session.results.parsedJD, session.jobId),
+        this.config.timeoutMs,
+      );
+
+      // Generate optimization suggestions
+      const suggestions = await this.withTimeout(
+        this.resumeOptimizerAgent.generateOptimizationSuggestions(userProfile, session.results.parsedJD),
+        this.config.timeoutMs,
+      ).catch(() => []);
 
       optimizedResumeStorage.add(optimized);
       session.results.optimizedResume = optimized;
+      session.results.optimizationSuggestions = suggestions;
       session.currentStep = "evaluate";
       session.updatedAt = new Date().toISOString();
       applicationSessionStorage.update(session.id, session);
@@ -211,7 +296,14 @@ export class ApplicationOrchestrator {
       return session;
     } catch (error) {
       console.error("[Agent Orchestrator] Generate step failed:", error);
-      throw error;
+      // Fallback to minimal resume on error
+      const fallback = this.createMinimalOptimizedResume(session.results.parsedJD, userProfile);
+      optimizedResumeStorage.add(fallback);
+      session.results.optimizedResume = fallback;
+      session.currentStep = "evaluate";
+      session.updatedAt = new Date().toISOString();
+      applicationSessionStorage.update(session.id, session);
+      return session;
     }
   }
 

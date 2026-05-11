@@ -23,6 +23,7 @@ function ApplicationsPage() {
   const [jobTitle, setJobTitle] = useState("");
   const [company, setCompany] = useState("");
   const [jobDescription, setJobDescription] = useState("");
+  const [currentResumeText, setCurrentResumeText] = useState("");
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -64,6 +65,7 @@ function ApplicationsPage() {
         company,
         description: jobDescription,
         url: url || undefined,
+        currentResumeText: currentResumeText || undefined,
         aiCredentials: {
           provider: ai.provider,
           model: ai.model,
@@ -87,13 +89,13 @@ function ApplicationsPage() {
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 p-8">
       <div className="mx-auto max-w-6xl">
-        <h1 className="mb-2 text-4xl font-bold text-slate-900">Job Application Workflow</h1>
-        <p className="mb-8 text-lg text-slate-600">Analyze job postings and generate optimized resumes</p>
+        <h1 className="mb-2 text-4xl font-bold text-slate-900">求职者协作工作流</h1>
+        <p className="mb-8 text-lg text-slate-600">输入岗位信息和现有简历，依次完成提取、存储、HR 审核和修改确认</p>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           {/* Input Panel */}
           <Card className="sticky top-8 h-fit p-6">
-            <h2 className="mb-6 text-2xl font-semibold text-slate-900">Job Description</h2>
+            <h2 className="mb-6 text-2xl font-semibold text-slate-900">岗位与简历信息</h2>
 
             <div className="space-y-4">
               <div>
@@ -136,6 +138,18 @@ function ApplicationsPage() {
                   disabled={loading}
                   rows={12}
                   className="min-h-80"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Current Resume (Optional)</label>
+                <Textarea
+                  placeholder="Paste your existing resume here so the helper agent can adapt it for this role..."
+                  value={currentResumeText}
+                  onChange={(e) => setCurrentResumeText(e.target.value)}
+                  disabled={loading}
+                  rows={10}
+                  className="min-h-56"
                 />
               </div>
 
@@ -287,11 +301,77 @@ function ApplicationsPage() {
                   </Card>
                 )}
 
+                {result.hrReview && (
+                  <Card className="border-amber-200 bg-amber-50 p-6">
+                    <h3 className="mb-4 text-xl font-semibold text-amber-900">HR Agent Review</h3>
+                    <div className="space-y-3 text-sm text-amber-900">
+                      <p>
+                        Decision: <strong>{result.hrReview.decision}</strong> | Score: {result.hrReview.score}% |
+                        Reliability: {result.hrReview.reliability}%
+                      </p>
+                      <p>{result.hrReview.summary}</p>
+                      {result.hrReview.blockingReasons?.length > 0 && (
+                        <div>
+                          <h4 className="mb-1 font-medium">Blocking Reasons</h4>
+                          <ul className="list-disc space-y-1 pl-5">
+                            {result.hrReview.blockingReasons.map((reason: string, idx: number) => (
+                              <li key={idx}>{reason}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {result.hrReview.suggestedChanges?.length > 0 && (
+                        <div>
+                          <h4 className="mb-1 font-medium">Suggested Changes</h4>
+                          <ul className="list-disc space-y-1 pl-5">
+                            {result.hrReview.suggestedChanges.map((item: string, idx: number) => (
+                              <li key={idx}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                )}
+
+                {result.candidateRevision && (
+                  <Card className="border-violet-200 bg-violet-50 p-6">
+                    <h3 className="mb-4 text-xl font-semibold text-violet-900">Candidate Helper Agent</h3>
+                    <div className="space-y-3 text-sm text-violet-900">
+                      <p>
+                        Status: <strong>{result.candidateRevision.status}</strong> | Confidence:{" "}
+                        {result.candidateRevision.confidence}%
+                      </p>
+                      <p>{result.candidateRevision.message}</p>
+                      <p className="rounded-md bg-white/80 p-3">{result.candidateRevision.userApprovalQuestion}</p>
+                      {result.candidateRevision.revisedHeadline && (
+                        <p>
+                          <strong>Revised Headline:</strong> {result.candidateRevision.revisedHeadline}
+                        </p>
+                      )}
+                      {result.candidateRevision.revisedSummary && (
+                        <p>
+                          <strong>Revised Summary:</strong> {result.candidateRevision.revisedSummary}
+                        </p>
+                      )}
+                      {result.candidateRevision.revisionNotes?.length > 0 && (
+                        <div>
+                          <h4 className="mb-1 font-medium">Revision Notes</h4>
+                          <ul className="list-disc space-y-1 pl-5">
+                            {result.candidateRevision.revisionNotes.map((note: string, idx: number) => (
+                              <li key={idx}>{note}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                )}
+
                 {/* Next Steps */}
                 <Card className="border-slate-200 bg-slate-50 p-4">
                   <p className="text-sm text-slate-600">
-                    <strong>Next steps:</strong> Review the analysis above. You can now generate an optimized resume or
-                    proceed with the application.
+                    <strong>Next steps:</strong> 先查看 HR 审核和候选人辅助建议，再决定是否接受这版修改方向。
                   </p>
                 </Card>
               </>
@@ -304,9 +384,7 @@ function ApplicationsPage() {
               <Card className="flex h-96 items-center justify-center p-6">
                 <div className="text-center">
                   <p className="mb-2 text-lg text-slate-500">No analysis yet</p>
-                  <p className="text-sm text-slate-400">
-                    Enter a job description and click "Analyze Job" to get started
-                  </p>
+                  <p className="text-sm text-slate-400">填写岗位信息和现有简历后点击“Analyze Job”开始</p>
                 </div>
               </Card>
             )}
@@ -315,10 +393,8 @@ function ApplicationsPage() {
               <Card className="flex h-96 items-center justify-center p-6">
                 <div className="text-center">
                   <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500" />
-                  <p className="text-lg text-slate-600">Analyzing job posting...</p>
-                  <p className="mt-2 text-sm text-slate-500">
-                    Parsing requirements, matching skills, and generating recommendations
-                  </p>
+                  <p className="text-lg text-slate-600">正在生成工作流结果...</p>
+                  <p className="mt-2 text-sm text-slate-500">提取信息、存储信息、HR 审核、候选人辅助修改建议</p>
                 </div>
               </Card>
             )}

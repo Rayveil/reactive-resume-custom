@@ -512,6 +512,11 @@ export const metadataSchema = z.object({
     .describe(
       "Personal notes for the resume. Can be used to add any additional information or instructions for the resume. These notes are not displayed on the resume, they are only visible to the author of the resume when editing the resume. This should be a HTML-formatted string.",
     ),
+  // Agent/ingestion metadata used by multi-agent system. Optional and backwards-compatible.
+  extractedBy: z.string().catch("").describe("Agent id or name that extracted this resume."),
+  extractedAt: z.string().catch("").describe("ISO timestamp when the resume was extracted."),
+  source: z.string().catch("").describe("Original source of the resume file (e.g. 'pdf', 'docx', 'json')."),
+  memoryId: z.string().catch("").describe("Unique id in the shared memory / vector DB for this resume."),
 });
 
 export const resumeDataSchema = z.object({
@@ -674,5 +679,10 @@ export const defaultResumeData: ResumeData = {
       },
     },
     notes: "",
+    // agent metadata defaults (kept empty to preserve frontend behavior)
+    extractedBy: "",
+    extractedAt: "",
+    source: "",
+    memoryId: "",
   },
 };
