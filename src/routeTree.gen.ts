@@ -25,6 +25,7 @@ import { Route as AuthResetPasswordRouteImport } from "./routes/auth/reset-passw
 import { Route as AuthRegisterRouteImport } from "./routes/auth/register";
 import { Route as AuthLoginRouteImport } from "./routes/auth/login";
 import { Route as AuthForgotPasswordRouteImport } from "./routes/auth/forgot-password";
+import { Route as ApiModificationPreviewsRouteImport } from "./routes/api/modification-previews";
 import { Route as ApiHealthRouteImport } from "./routes/api/health";
 import { Route as UsernameSlugRouteImport } from "./routes/$username/$slug";
 import { Route as DashboardWebpageRouteRouteImport } from "./routes/dashboard/webpage/route";
@@ -126,6 +127,11 @@ const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   id: "/forgot-password",
   path: "/forgot-password",
   getParentRoute: () => AuthRouteRoute,
+} as any);
+const ApiModificationPreviewsRoute = ApiModificationPreviewsRouteImport.update({
+  id: "/api/modification-previews",
+  path: "/api/modification-previews",
+  getParentRoute: () => rootRouteImport,
 } as any);
 const ApiHealthRoute = ApiHealthRouteImport.update({
   id: "/api/health",
@@ -254,6 +260,7 @@ export interface FileRoutesByFullPath {
   "/dashboard/webpage": typeof DashboardWebpageRouteRoute;
   "/$username/$slug": typeof UsernameSlugRoute;
   "/api/health": typeof ApiHealthRoute;
+  "/api/modification-previews": typeof ApiModificationPreviewsRoute;
   "/auth/forgot-password": typeof AuthForgotPasswordRoute;
   "/auth/login": typeof AuthLoginRoute;
   "/auth/register": typeof AuthRegisterRoute;
@@ -289,6 +296,7 @@ export interface FileRoutesByTo {
   "/dashboard/webpage": typeof DashboardWebpageRouteRoute;
   "/$username/$slug": typeof UsernameSlugRoute;
   "/api/health": typeof ApiHealthRoute;
+  "/api/modification-previews": typeof ApiModificationPreviewsRoute;
   "/auth/forgot-password": typeof AuthForgotPasswordRoute;
   "/auth/login": typeof AuthLoginRoute;
   "/auth/register": typeof AuthRegisterRoute;
@@ -330,6 +338,7 @@ export interface FileRoutesById {
   "/dashboard/webpage": typeof DashboardWebpageRouteRoute;
   "/$username/$slug": typeof UsernameSlugRoute;
   "/api/health": typeof ApiHealthRoute;
+  "/api/modification-previews": typeof ApiModificationPreviewsRoute;
   "/auth/forgot-password": typeof AuthForgotPasswordRoute;
   "/auth/login": typeof AuthLoginRoute;
   "/auth/register": typeof AuthRegisterRoute;
@@ -372,6 +381,7 @@ export interface FileRouteTypes {
     | "/dashboard/webpage"
     | "/$username/$slug"
     | "/api/health"
+    | "/api/modification-previews"
     | "/auth/forgot-password"
     | "/auth/login"
     | "/auth/register"
@@ -407,6 +417,7 @@ export interface FileRouteTypes {
     | "/dashboard/webpage"
     | "/$username/$slug"
     | "/api/health"
+    | "/api/modification-previews"
     | "/auth/forgot-password"
     | "/auth/login"
     | "/auth/register"
@@ -447,6 +458,7 @@ export interface FileRouteTypes {
     | "/dashboard/webpage"
     | "/$username/$slug"
     | "/api/health"
+    | "/api/modification-previews"
     | "/auth/forgot-password"
     | "/auth/login"
     | "/auth/register"
@@ -487,6 +499,7 @@ export interface RootRouteChildren {
   BuilderResumeIdRouteRoute: typeof BuilderResumeIdRouteRouteWithChildren;
   UsernameSlugRoute: typeof UsernameSlugRoute;
   ApiHealthRoute: typeof ApiHealthRoute;
+  ApiModificationPreviewsRoute: typeof ApiModificationPreviewsRoute;
   PrinterResumeIdRoute: typeof PrinterResumeIdRoute;
   McpIndexRoute: typeof McpIndexRoute;
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute;
@@ -608,6 +621,13 @@ declare module "@tanstack/react-router" {
       fullPath: "/auth/forgot-password";
       preLoaderRoute: typeof AuthForgotPasswordRouteImport;
       parentRoute: typeof AuthRouteRoute;
+    };
+    "/api/modification-previews": {
+      id: "/api/modification-previews";
+      path: "/api/modification-previews";
+      fullPath: "/api/modification-previews";
+      preLoaderRoute: typeof ApiModificationPreviewsRouteImport;
+      parentRoute: typeof rootRouteImport;
     };
     "/api/health": {
       id: "/api/health";
@@ -864,6 +884,7 @@ const rootRouteChildren: RootRouteChildren = {
   BuilderResumeIdRouteRoute: BuilderResumeIdRouteRouteWithChildren,
   UsernameSlugRoute: UsernameSlugRoute,
   ApiHealthRoute: ApiHealthRoute,
+  ApiModificationPreviewsRoute: ApiModificationPreviewsRoute,
   PrinterResumeIdRoute: PrinterResumeIdRoute,
   McpIndexRoute: McpIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

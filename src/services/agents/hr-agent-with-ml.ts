@@ -1,19 +1,11 @@
-import z from "zod";
-
 import type { ResumeData } from "@/schema/resume/data";
 
-import {
-  MLModulesManager,
-  type CompleteMLAnalysis,
-  type SkillGapAnalysis,
-  type ImprovementRecommendation,
-} from "./ml-modules";
+import { MLModulesManager, type CompleteMLAnalysis, type ImprovementRecommendation } from "./ml-modules";
 import {
   getResumeFromMemory,
   searchResumeMemory,
   textToEmbedding,
   cosineSimilarity,
-  type AgentMemoryEntry,
   type SearchResult,
 } from "./shared-memory";
 
@@ -83,7 +75,7 @@ export interface MLInsights {
     recommendations: ImprovementRecommendation[];
     summary: string;
     estimatedScoreIncrease: number;
-    priorities: string[];
+    priorities: ImprovementRecommendation[];
   };
 
   // Metadata
@@ -201,6 +193,18 @@ function resumeDataToText(data: ResumeData): string {
 // ===== SCORING FUNCTIONS =====
 
 function scoreIndustry(jdIndustries: string[], resumeText: string): DimensionScore {
+  // If JD does not specify industries, ignore this dimension (weight 0)
+  if (!jdIndustries || jdIndustries.length === 0) {
+    return {
+      dimension: "industry",
+      score: 50,
+      weight: 0,
+      explanation: "JD did not specify industry; this dimension is ignored in overall score.",
+      matchedItems: [],
+      unmatchedItems: [],
+    };
+  }
+
   const matched = jdIndustries.filter((ind) => resumeText.toLowerCase().includes(ind.toLowerCase()));
   const score = (matched.length / Math.max(jdIndustries.length, 1)) * 100;
   return {
@@ -219,6 +223,30 @@ function scoreSkills(jdSkills: string[], resumeData: ResumeData, bonusMultiplier
     ...skillsSection.map((s: any) => s.name?.toLowerCase() || ""),
     resumeDataToText(resumeData).toLowerCase(),
   ].join(" ");
+
+  // If JD does not specify required skills, ignore this dimension
+  if (!jdSkills || jdSkills.length === 0) {
+    return {
+      dimension: "skills",
+      score: 50,
+      weight: 0,
+      explanation: "JD did not specify required skills; this dimension is ignored in overall score.",
+      matchedItems: [],
+      unmatchedItems: [],
+    };
+  }
+
+  // If resume contains no skills, treat as neutral rather than zero
+  if (!resumeSkillsText || resumeSkillsText.trim().length === 0) {
+    return {
+      dimension: "skills",
+      score: 50,
+      weight: 0.35,
+      explanation: "Resume has no explicit skills section; treated as neutral and may be inferred from other sections.",
+      matchedItems: [],
+      unmatchedItems: jdSkills.slice(0, 5),
+    };
+  }
 
   let matched = 0;
   for (const skill of jdSkills) {
@@ -245,6 +273,25 @@ function scoreSkills(jdSkills: string[], resumeData: ResumeData, bonusMultiplier
 function scoreEducation(jdEducation: string, resumeData: ResumeData): DimensionScore {
   const educationSection = (resumeData as any).sections?.education?.items || [];
   const resumeEducationText = educationSection.map((e: any) => [e.degree, e.area].join(" ").toLowerCase()).join(" ");
+  // If JD doesn't specify education requirement, ignore dimension
+  if (!jdEducation || jdEducation.toLowerCase().trim() === "") {
+    return {
+      dimension: "education",
+      score: 50,
+      weight: 0,
+      explanation: "JD did not specify education requirement; this dimension is ignored in overall score.",
+    };
+  }
+
+  // If resume has no education info, treat as neutral rather than zero
+  if (!resumeEducationText || resumeEducationText.trim().length === 0) {
+    return {
+      dimension: "education",
+      score: 50,
+      weight: 0.1,
+      explanation: "Resume has no education section; treated as neutral and may be validated by interviewer.",
+    };
+  }
 
   let score = 0;
   const explanation: string[] = [];
@@ -261,8 +308,8 @@ function scoreEducation(jdEducation: string, resumeData: ResumeData): DimensionS
       score = 50;
       explanation.push("Has Associate/Diploma, below Bachelor requirement.");
     } else {
-      score = 0;
-      explanation.push("No Bachelor's degree found.");
+      score = 30;
+      explanation.push("No Bachelor's degree found; scored conservatively but not zero.");
     }
   }
 
@@ -274,17 +321,54 @@ function scoreEducation(jdEducation: string, resumeData: ResumeData): DimensionS
   };
 }
 
-function scoreSalary(jdSalary: { min: number; max: number; currency: string }, resumeData: ResumeData): DimensionScore {
+function scoreSalary(
+  jdSalary: { min: number; max: number; currency: string },
+  _resumeData: ResumeData,
+): DimensionScore {
+  // If JD does not state salary, ignore this dimension
+  if (!jdSalary || (jdSalary.min == null && jdSalary.max == null)) {
+    return {
+      dimension: "salary",
+      score: 50,
+      weight: 0,
+      explanation: "JD did not specify salary range; this dimension is ignored in overall score.",
+    };
+  }
+
+  // Salary is rarely exact in resume; provide a conservative default of 75
   return {
     dimension: "salary",
     score: 75,
     weight: 0.05,
-    explanation: "Salary expectations not directly evaluated from resume.",
+    explanation: "Salary expectations not directly evaluated from resume; JD specified a range.",
   };
 }
 
 function scoreLocation(jdLocations: string[], resumeData: ResumeData): DimensionScore {
+  // If JD doesn't specify locations, ignore this dimension
+  if (!jdLocations || jdLocations.length === 0) {
+    return {
+      dimension: "location",
+      score: 50,
+      weight: 0,
+      explanation: "JD did not specify location; this dimension is ignored in overall score.",
+      matchedItems: [],
+      unmatchedItems: [],
+    };
+  }
+
   const resumeLocation = resumeData.basics?.location || "";
+  if (!resumeLocation) {
+    return {
+      dimension: "location",
+      score: 50,
+      weight: 0.05,
+      explanation: "Resume location unknown; treated as neutral.",
+      matchedItems: [],
+      unmatchedItems: jdLocations,
+    };
+  }
+
   const matched = jdLocations.filter((loc) => resumeLocation.toLowerCase().includes(loc.toLowerCase()));
   const score = matched.length > 0 ? 100 : jdLocations.includes("remote") ? 80 : 50;
 
@@ -299,6 +383,18 @@ function scoreLocation(jdLocations: string[], resumeData: ResumeData): Dimension
 }
 
 function scorePersonality(jdTraits: string[], resumeData: ResumeData): DimensionScore {
+  // If JD doesn't specify personality traits, ignore this dimension
+  if (!jdTraits || jdTraits.length === 0) {
+    return {
+      dimension: "personality",
+      score: 50,
+      weight: 0,
+      explanation: "JD did not specify personality traits; this dimension is ignored in overall score.",
+      matchedItems: [],
+      unmatchedItems: [],
+    };
+  }
+
   const resumeText = resumeDataToText(resumeData).toLowerCase();
   const matched = jdTraits.filter((trait) => resumeText.includes(trait.toLowerCase()));
   const score = (matched.length / Math.max(jdTraits.length, 1)) * 100;
@@ -367,8 +463,17 @@ export class EnhancedHRAgent {
         scorePersonality(parsedJD.personalityTraits, resumeData),
       ];
 
-      const metadataKeyInfoMatching = dimensionScores.reduce((sum, ds) => sum + (ds.score / 100) * ds.weight, 0) * 100;
-      const comprehensiveScore = initialSemanticRelevance * 0.3 + metadataKeyInfoMatching * 0.7;
+      // Normalize metadata-based score by active weights (ignore dimensions with weight 0)
+      const totalActiveWeight = dimensionScores.reduce((s, ds) => s + (ds.weight > 0 ? ds.weight : 0), 0);
+      const weightedSum = dimensionScores.reduce(
+        (sum, ds) => sum + (ds.score / 100) * (ds.weight > 0 ? ds.weight : 0),
+        0,
+      );
+      const metadataKeyInfoMatching = totalActiveWeight > 0 ? (weightedSum / totalActiveWeight) * 100 : 0;
+
+      // Convert semantic relevance to percentage before combining
+      const semanticPercent = (Math.round(initialSemanticRelevance * 100) / 100) * 100;
+      const comprehensiveScore = semanticPercent * 0.3 + metadataKeyInfoMatching * 0.7;
 
       // === STAGE 3: ML Analysis ===
       const mlAnalysis = await this.mlManager.analyzeMatch(resumeData, jdInput, useLLM);
@@ -419,8 +524,8 @@ export class EnhancedHRAgent {
           mlScore: mlAnalysis.scoring.finalScore,
           mlScoreTier: mlAnalysis.scoring.matchTier,
           scoreBreakdown: {
-            semanticComponent: mlAnalysis.matchScoreBreakdown.semanticComponent.contribution,
-            skillComponent: mlAnalysis.matchScoreBreakdown.skillComponent.contribution,
+            semanticComponent: mlAnalysis.scoring.semanticComponent.contribution,
+            skillComponent: mlAnalysis.scoring.skillComponent.contribution,
             formula: mlAnalysis.matchScoreBreakdown.formula,
           },
           improvements: mlAnalysis.improvements,
@@ -487,7 +592,7 @@ export class EnhancedHRAgent {
   private generateCombinedRecommendations(
     dimensionScores: DimensionScore[],
     mlAnalysis: CompleteMLAnalysis,
-    jdInput: any,
+    _jdInput: any,
   ): string[] {
     const recommendations: string[] = [];
 
@@ -518,7 +623,7 @@ export class EnhancedHRAgent {
   }
 
   private generateOverallAssessment(
-    resumeData: ResumeData,
+    _resumeData: ResumeData,
     hrScore: number,
     mlScore: number,
     dimensionScores: DimensionScore[],
@@ -599,4 +704,3 @@ function generateSuggestions(scores: DimensionScore[], jdInput: any): string[] {
 
 // Export
 export { textToEmbedding, cosineSimilarity, searchResumeMemory, getResumeFromMemory };
-export type { EnhancedHRAssessmentResult, MLInsights };

@@ -1,1 +1,128 @@
-/**\n * ML Modules Integration & Index\n * Inspired by: Placify's modular architecture with clean integration\n *\n * Provides unified interface for all ML modules.\n * Orchestrates semantic matching → skill gap analysis → scoring → improvements.\n *\n * Pattern: Facade pattern for complex module orchestration\n */\n\nimport type { ResumeData } from \"@/schema/resume/data\";\nimport {\n  extractResumeText,\n  extractJobText,\n  calculateSemanticSimilarity,\n  computeHybridMatchScore,\n  DEFAULT_SEMANTIC_CONFIG,\n  type SemanticMatchResult,\n  type SemanticMatchConfig,\n} from \"./semantic-matcher\";\nimport {\n  analyzeSkillGap,\n  generateSkillGapSuggestions,\n  calculateSkillMatchPercentage,\n  type SkillGapAnalysis,\n} from \"./skill-gap-analyzer\";\nimport {\n  calculateScoreBreakdown,\n  generateImprovementPlan,\n  MATCH_TIER_THRESHOLDS,\n  type ScoreBreakdown,\n} from \"./scoring-engine\";\nimport {\n  generateImprovements,\n  type ImprovementRecommendation,\n  type ImprovementResult,\n} from \"./improvement-generator\";\n\n/**\n * Complete ML Analysis Result\n * Unified output combining all module results\n */\nexport interface CompleteMLAnalysis {\n  // Semantic matching results\n  semantic: SemanticMatchResult;\n\n  // Skill gap analysis\n  skillGap: SkillGapAnalysis;\n\n  // Comprehensive scoring\n  scoring: ScoreBreakdown;\n\n  // Match score components for hybrid formula\n  matchScoreBreakdown: {\n    semanticComponent: number; // 0-100\n    skillComponent: number; // 0-100\n    finalScore: number; // 0-100\n    formula: string; // Display formula\n  };\n\n  // Improvement recommendations\n  improvements: ImprovementResult;\n\n  // Metadata\n  metadata: {\n    analysisTimestamp: Date;\n    resumeId?: string;\n    jobId?: string;\n    analysisVersion: string; // For tracking changes\n  };\n}\n\n/**\n * ML Modules Manager\n * Orchestrates all components in proper sequence\n */\nexport class MLModulesManager {\n  private config: SemanticMatchConfig;\n\n  constructor(config: Partial<SemanticMatchConfig> = {}) {\n    this.config = { ...DEFAULT_SEMANTIC_CONFIG, ...config };\n  }\n\n  /**\n   * Execute complete ML analysis pipeline\n   * Orchestrates all components in sequence\n   *\n   * @param resume Resume data\n   * @param jobInput Job description input\n   * @param useLLM Whether to use LLM for improvements\n   * @returns Complete analysis result\n   */\n  async analyzeMatch(\n    resume: ResumeData,\n    jobInput: any,\n    useLLM = false,\n  ): Promise<CompleteMLAnalysis> {\n    try {\n      // Step 1: Calculate semantic similarity\n      const semantic = await calculateSemanticSimilarity(resume, jobInput, this.config);\n\n      // Step 2: Analyze skill gaps\n      const resumeSkills = resume.sections?.skills?.items?.map((s: any) => s.name) || [];\n      const jobSkills = jobInput.requiredSkills || [];\n      const skillGap = analyzeSkillGap(jobSkills, resumeSkills);\n\n      // Step 3: Calculate skill match percentage\n      const skillMatchPercent = calculateSkillMatchPercentage(skillGap, 1.1);\n\n      // Step 4: Calculate comprehensive score\n      const finalScore = computeHybridMatchScore(\n        semantic.semanticSimilarity,\n        skillMatchPercent,\n        this.config,\n      );\n\n      // Step 5: Generate score breakdown\n      const scoreBreakdown = calculateScoreBreakdown(semantic.semanticScore, skillGap, this.config);\n\n      // Step 6: Generate improvements\n      const improvements = await generateImprovements(\n        resume,\n        jobInput,\n        skillGap,\n        scoreBreakdown,\n        useLLM,\n      );\n\n      // Calculate components for display\n      const semanticComponent = (semantic.semanticSimilarity * 100 * this.config.semanticWeight) / 100;\n      const skillComponent = (skillMatchPercent * this.config.skillWeight) / 100;\n\n      return {\n        semantic,\n        skillGap,\n        scoring: scoreBreakdown,\n        matchScoreBreakdown: {\n          semanticComponent: Math.round(semanticComponent * 10) / 10,\n          skillComponent: Math.round(skillComponent * 10) / 10,\n          finalScore: Math.round(finalScore * 10) / 10,\n          formula: `(${Math.round(semantic.semanticSimilarity * 100)} × 0.7) + (${skillMatchPercent} × 0.3) = ${finalScore.toFixed(1)}`,\n        },\n        improvements,\n        metadata: {\n          analysisTimestamp: new Date(),\n          analysisVersion: \"1.0-placify-inspired\",\n        },\n      };\n    } catch (err) {\n      console.error(\"Error in ML analysis pipeline:\", err);\n      throw err;\n    }\n  }\n\n  /**\n   * Get configuration\n   */\n  getConfig(): SemanticMatchConfig {\n    return { ...this.config };\n  }\n\n  /**\n   * Update configuration\n   */\n  updateConfig(config: Partial<SemanticMatchConfig>): void {\n    this.config = { ...this.config, ...config };\n  }\n}\n\n/**\n * Export all public types and functions\n */\nexport {\n  // Semantic matching\n  extractResumeText,\n  extractJobText,\n  calculateSemanticSimilarity,\n  computeHybridMatchScore,\n  DEFAULT_SEMANTIC_CONFIG,\n  type SemanticMatchResult,\n  type SemanticMatchConfig,\n  // Skill gap\n  analyzeSkillGap,\n  generateSkillGapSuggestions,\n  calculateSkillMatchPercentage,\n  type SkillGapAnalysis,\n  // Scoring\n  calculateScoreBreakdown,\n  generateImprovementPlan,\n  MATCH_TIER_THRESHOLDS,\n  type ScoreBreakdown,\n  // Improvements\n  generateImprovements,\n  type ImprovementRecommendation,\n  type ImprovementResult,\n};\n\n/**\n * Convenience function for quick analysis\n * Useful for one-off calls without managing manager instance\n */\nexport async function quickAnalyze(\n  resume: ResumeData,\n  jobInput: any,\n  useLLM = false,\n): Promise<CompleteMLAnalysis> {\n  const manager = new MLModulesManager();\n  return manager.analyzeMatch(resume, jobInput, useLLM);\n}\n"}
+/**
+ * ML Modules Integration & Index
+ * Unified facade for semantic matching, skill gap analysis, scoring, and improvements.
+ */
+
+import type { ResumeData } from "@/schema/resume/data";
+
+import { generateImprovements, type ImprovementRecommendation, type ImprovementResult } from "./improvement-generator";
+import {
+  calculateScoreBreakdown,
+  generateImprovementPlan,
+  MATCH_TIER_THRESHOLDS,
+  type ScoreBreakdown,
+} from "./scoring-engine";
+import {
+  extractResumeText,
+  extractJobText,
+  calculateSemanticSimilarity,
+  computeHybridMatchScore,
+  DEFAULT_SEMANTIC_CONFIG,
+  type SemanticMatchResult,
+  type SemanticMatchConfig,
+} from "./semantic-matcher";
+import {
+  analyzeSkillGap,
+  generateSkillGapSuggestions,
+  calculateSkillMatchPercentage,
+  type SkillGapAnalysis,
+} from "./skill-gap-analyzer";
+
+export interface CompleteMLAnalysis {
+  semantic: SemanticMatchResult;
+  skillGap: SkillGapAnalysis;
+  scoring: ScoreBreakdown;
+  matchScoreBreakdown: {
+    semanticComponent: number;
+    skillComponent: number;
+    finalScore: number;
+    formula: string;
+  };
+  improvements: ImprovementResult;
+  metadata: {
+    analysisTimestamp: Date;
+    resumeId?: string;
+    jobId?: string;
+    analysisVersion: string;
+  };
+}
+
+export class MLModulesManager {
+  private config: SemanticMatchConfig;
+
+  constructor(config: Partial<SemanticMatchConfig> = {}) {
+    this.config = { ...DEFAULT_SEMANTIC_CONFIG, ...config };
+  }
+
+  async analyzeMatch(resume: ResumeData, jobInput: any, useLLM = false): Promise<CompleteMLAnalysis> {
+    try {
+      const semantic = await calculateSemanticSimilarity(resume, jobInput, this.config);
+
+      const resumeSkills = resume.sections?.skills?.items?.map((s: any) => s.name) || [];
+      const jobSkills = jobInput.requiredSkills || [];
+      const skillGap = analyzeSkillGap(jobSkills, resumeSkills);
+      const skillMatchPercent = calculateSkillMatchPercentage(skillGap, 1.1);
+
+      const finalScore = computeHybridMatchScore(semantic.semanticSimilarity, skillMatchPercent, this.config);
+      const scoreBreakdown = calculateScoreBreakdown(semantic.semanticScore, skillGap, this.config);
+      const improvements = await generateImprovements(resume, jobInput, skillGap, scoreBreakdown, useLLM);
+
+      const semanticComponent = (semantic.semanticSimilarity * 100 * this.config.semanticWeight) / 100;
+      const skillComponent = (skillMatchPercent * this.config.skillWeight) / 100;
+
+      return {
+        semantic,
+        skillGap,
+        scoring: scoreBreakdown,
+        matchScoreBreakdown: {
+          semanticComponent: Math.round(semanticComponent * 10) / 10,
+          skillComponent: Math.round(skillComponent * 10) / 10,
+          finalScore: Math.round(finalScore * 10) / 10,
+          formula: `(${Math.round(semantic.semanticSimilarity * 100)} × 0.7) + (${skillMatchPercent} × 0.3) = ${finalScore.toFixed(1)}`,
+        },
+        improvements,
+        metadata: {
+          analysisTimestamp: new Date(),
+          analysisVersion: "1.0-placify-inspired",
+        },
+      };
+    } catch (error) {
+      console.error("Error in ML analysis pipeline:", error);
+      throw error;
+    }
+  }
+
+  getConfig(): SemanticMatchConfig {
+    return { ...this.config };
+  }
+
+  updateConfig(config: Partial<SemanticMatchConfig>): void {
+    this.config = { ...this.config, ...config };
+  }
+}
+
+export {
+  extractResumeText,
+  extractJobText,
+  calculateSemanticSimilarity,
+  computeHybridMatchScore,
+  DEFAULT_SEMANTIC_CONFIG,
+  type SemanticMatchResult,
+  type SemanticMatchConfig,
+  analyzeSkillGap,
+  generateSkillGapSuggestions,
+  calculateSkillMatchPercentage,
+  type SkillGapAnalysis,
+  calculateScoreBreakdown,
+  generateImprovementPlan,
+  MATCH_TIER_THRESHOLDS,
+  type ScoreBreakdown,
+  generateImprovements,
+  type ImprovementRecommendation,
+  type ImprovementResult,
+};
+
+export async function quickAnalyze(resume: ResumeData, jobInput: any, useLLM = false): Promise<CompleteMLAnalysis> {
+  const manager = new MLModulesManager();
+  return manager.analyzeMatch(resume, jobInput, useLLM);
+}

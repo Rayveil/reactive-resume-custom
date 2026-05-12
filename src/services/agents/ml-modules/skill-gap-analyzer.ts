@@ -1,1 +1,133 @@
-/**\n * Skill Gap Analysis Module\n * Inspired by: Placify ML Modules - career_predictor/skill_gap_analyzer.py\n *\n * Identifies missing skills, skill overlap, and categorizes gaps\n * for actionable resume improvement recommendations.\n *\n * Pattern: Set-based gap identification + categorization\n * Performance: <1ms (pure set operations)\n * Complexity: O(n+m) where n=job skills, m=resume skills\n */\n\n/**\n * Result of skill gap analysis\n * Adapted from: Placify's skill gap output structure\n */\nexport interface SkillGapAnalysis {\n  matchedSkills: string[]; // Skills in both resume and job\n  missingSkills: string[]; // Skills in job but not resume (critical)\n  weakSkills: string[]; // Skills in resume but need improvement\n  bonusSkills: string[]; // Skills in resume but not in job (differentiator)\n  skillCoverage: number; // Percentage of job skills covered (0-100)\n  gapPriority: \"critical\" | \"high\" | \"medium\" | \"low\";\n}\n\n/**\n * Normalize skill names for comparison\n * Handles variations: \"python\" vs \"Python\", \"node.js\" vs \"NodeJS\", etc.\n */\nfunction normalizeSkill(skill: string): string {\n  return skill\n    .toLowerCase()\n    .trim()\n    .replace(/\\s+/g, \"\")\n    .replace(/\\./g, \"\")\n    .replace(/\\+/g, \"p\")\n    .replace(/[#]/g, \"sharp\"); // C# → Csharp\n}\n\n/**\n * Find similar skills accounting for variations\n * E.g., \"Python\" matches \"python\", \"nodejs\" matches \"node.js\"\n */\nfunction isSimilarSkill(skill1: string, skill2: string, threshold = 0.8): boolean {\n  const norm1 = normalizeSkill(skill1);\n  const norm2 = normalizeSkill(skill2);\n\n  // Exact match after normalization\n  if (norm1 === norm2) return true;\n\n  // Substring match (e.g., \"java\" matches \"javascript\")\n  if (norm1.includes(norm2) || norm2.includes(norm1)) {\n    return true;\n  }\n\n  // Levenshtein-like simple check (optional, can add if needed)\n  return false;\n}\n\n/**\n * Categorize skill importance based on frequency in job descriptions\n * Higher frequency = more important\n */\nfunction getSkillImportance(skill: string, jobSkills: string[]): \"critical\" | \"important\" | \"nice-to-have\" {\n  const normalizedSkill = normalizeSkill(skill);\n  const skillIndex = jobSkills.findIndex((s) => isSimilarSkill(s, skill));\n\n  // Assume position in list indicates importance (first skills more critical)\n  if (skillIndex < jobSkills.length * 0.33) {\n    return \"critical\";\n  } else if (skillIndex < jobSkills.length * 0.66) {\n    return \"important\";\n  }\n  return \"nice-to-have\";\n}\n\n/**\n * Analyze skill gaps between job requirements and resume skills\n * Core algorithm: Set operations (matching, gap identification)\n * Inspired by: Placify's get_skill_gap() function\n *\n * @param jobSkills Array of skills required for the job\n * @param resumeSkills Array of skills in the resume\n * @returns Detailed skill gap analysis\n */\nexport function analyzeSkillGap(jobSkills: string[], resumeSkills: string[]): SkillGapAnalysis {\n  // Normalize all skills for comparison\n  const normalizedJobSkills = jobSkills.map(normalizeSkill);\n  const normalizedResumeSkills = resumeSkills.map(normalizeSkill);\n\n  // Sets for efficient operations\n  const jobSet = new Set(normalizedJobSkills);\n  const resumeSet = new Set(normalizedResumeSkills);\n\n  // Initialize result categories\n  const matched: string[] = [];\n  const missing: string[] = [];\n  const bonus: string[] = [];\n\n  // Find matched skills\n  // For each job skill, find if there's a similar resume skill\n  for (let i = 0; i < jobSkills.length; i++) {\n    const jobSkill = jobSkills[i];\n    const normalizedJob = normalizedJobSkills[i];\n\n    let foundMatch = false;\n    for (let j = 0; j < resumeSkills.length; j++) {\n      if (isSimilarSkill(jobSkill, resumeSkills[j])) {\n        matched.push(jobSkill);\n        foundMatch = true;\n        break;\n      }\n    }\n\n    if (!foundMatch) {\n      missing.push(jobSkill);\n    }\n  }\n\n  // Find bonus skills (in resume but not in job requirements)\n  for (const resumeSkill of resumeSkills) {\n    let isRequired = false;\n    for (const jobSkill of jobSkills) {\n      if (isSimilarSkill(resumeSkill, jobSkill)) {\n        isRequired = true;\n        break;\n      }\n    }\n    if (!isRequired) {\n      bonus.push(resumeSkill);\n    }\n  }\n\n  // Calculate metrics\n  const skillCoverage =\n    jobSkills.length > 0 ? Math.round((matched.length / jobSkills.length) * 100) : 100;\n\n  // Determine gap priority based on coverage and missing skills\n  let gapPriority: \"critical\" | \"high\" | \"medium\" | \"low\" = \"low\";\n  if (skillCoverage < 30) {\n    gapPriority = \"critical\"; // <30% coverage\n  } else if (skillCoverage < 60) {\n    gapPriority = \"high\"; // 30-60% coverage\n  } else if (skillCoverage < 85) {\n    gapPriority = \"medium\"; // 60-85% coverage\n  }\n\n  // Identify weak skills (present but perhaps not at the level needed)\n  // For now, we'll mark older skills or less common skills as potentially weak\n  const weakSkills = matched.slice(0, Math.ceil(matched.length * 0.3));\n\n  return {\n    matchedSkills: matched,\n    missingSkills: missing,\n    weakSkills: weakSkills,\n    bonusSkills: bonus,\n    skillCoverage,\n    gapPriority,\n  };\n}\n\n/**\n * Generate improvement suggestions based on skill gap\n * Provides actionable steps for resume modification\n *\n * @param gap Skill gap analysis result\n * @param jobTitle Title of the target job\n * @returns Array of specific, actionable suggestions\n */\nexport function generateSkillGapSuggestions(gap: SkillGapAnalysis, jobTitle: string): string[] {\n  const suggestions: string[] = [];\n\n  // Critical missing skills\n  if (gap.missingSkills.length > 0) {\n    const topMissing = gap.missingSkills.slice(0, 3);\n    suggestions.push(\n      `Add missing required skills to resume: ${topMissing.join(\", \")}. ` +\n        `Consider taking online courses or completing projects that demonstrate these skills.`,\n    );\n  }\n\n  // Skill coverage feedback\n  if (gap.skillCoverage < 60) {\n    suggestions.push(\n      `Your current skills cover only ${gap.skillCoverage}% of ${jobTitle} requirements. ` +\n        `Prioritize acquiring the most critical missing skills before applying.`,\n    );\n  } else if (gap.skillCoverage < 85) {\n    suggestions.push(\n      `You have good foundation (${gap.skillCoverage}% coverage) but some gaps remain. ` +\n        `Strengthen: ${gap.missingSkills.slice(0, 2).join(\", \")}.`,\n    );\n  }\n\n  // Highlight matched skills\n  if (gap.matchedSkills.length > 0) {\n    const topMatched = gap.matchedSkills.slice(0, 3);\n    suggestions.push(\n      `Emphasize your existing skills in the resume: ${topMatched.join(\", \")}. ` +\n        `Include specific project examples or achievements demonstrating mastery.`,\n    );\n  }\n\n  // Bonus skills\n  if (gap.bonusSkills.length > 3) {\n    suggestions.push(\n      `You have ${gap.bonusSkills.length} extra skills beyond requirements. ` +\n        `Highlight top differentiators: ${gap.bonusSkills.slice(0, 2).join(\", \")} ` +\n        `to stand out from other candidates.`,\n    );\n  }\n\n  // Resume action items\n  suggestions.push(\n    `Resume Action: Add a separate \"Skills\" section listing all relevant competencies. ` +\n      `Order by relevance to ${jobTitle}, with proficiency levels (e.g., 5+ years, intermediate).`,\n  );\n\n  return suggestions;\n}\n\n/**\n * Calculate skill match percentage for hybrid scoring formula\n * Adapted from: Placify's skill match component (30% weight in final score)\n *\n * @param gap Skill gap analysis result\n * @param bonusMultiplier Extra points for exceeding requirements (like Placify)\n * @returns Skill match percentage 0-100\n */\nexport function calculateSkillMatchPercentage(\n  gap: SkillGapAnalysis,\n  bonusMultiplier = 1.1,\n): number {\n  let score = gap.skillCoverage;\n\n  // Bonus multiplier if resume has extra skills\n  // Inspired by: Placify's +5pts per bonus skill (max +10)\n  if (gap.bonusSkills.length > 0) {\n    const bonusPoints = Math.min(gap.bonusSkills.length * 5, 10);\n    score = Math.min(100, score * bonusMultiplier);\n  }\n\n  return score;\n}\n"}
+/**
+ * Skill Gap Analysis Module
+ * Identifies missing skills, skill overlap, and categorizes gaps for resume improvement.
+ */
+
+export interface SkillGapAnalysis {
+  matchedSkills: string[];
+  missingSkills: string[];
+  weakSkills: string[];
+  bonusSkills: string[];
+  skillCoverage: number;
+  gapPriority: "critical" | "high" | "medium" | "low";
+}
+
+function normalizeSkill(skill: string): string {
+  return skill.toLowerCase().trim().replace(/\s+/g, "").replace(/\./g, "").replace(/\+/g, "p").replace(/[#]/g, "sharp");
+}
+
+function isSimilarSkill(skill1: string, skill2: string): boolean {
+  const norm1 = normalizeSkill(skill1);
+  const norm2 = normalizeSkill(skill2);
+  if (norm1 === norm2) return true;
+  if (norm1.includes(norm2) || norm2.includes(norm1)) return true;
+  return false;
+}
+
+export function analyzeSkillGap(jobSkills: string[], resumeSkills: string[]): SkillGapAnalysis {
+  const matched: string[] = [];
+  const missing: string[] = [];
+  const bonus: string[] = [];
+
+  for (const jobSkill of jobSkills) {
+    let foundMatch = false;
+    for (const resumeSkill of resumeSkills) {
+      if (isSimilarSkill(jobSkill, resumeSkill)) {
+        matched.push(jobSkill);
+        foundMatch = true;
+        break;
+      }
+    }
+
+    if (!foundMatch) {
+      missing.push(jobSkill);
+    }
+  }
+
+  for (const resumeSkill of resumeSkills) {
+    let isRequired = false;
+    for (const jobSkill of jobSkills) {
+      if (isSimilarSkill(resumeSkill, jobSkill)) {
+        isRequired = true;
+        break;
+      }
+    }
+
+    if (!isRequired) {
+      bonus.push(resumeSkill);
+    }
+  }
+
+  const skillCoverage = jobSkills.length > 0 ? Math.round((matched.length / jobSkills.length) * 100) : 100;
+
+  let gapPriority: "critical" | "high" | "medium" | "low" = "low";
+  if (skillCoverage < 30) gapPriority = "critical";
+  else if (skillCoverage < 60) gapPriority = "high";
+  else if (skillCoverage < 85) gapPriority = "medium";
+
+  return {
+    matchedSkills: matched,
+    missingSkills: missing,
+    weakSkills: matched.slice(0, Math.ceil(matched.length * 0.3)),
+    bonusSkills: bonus,
+    skillCoverage,
+    gapPriority,
+  };
+}
+
+export function generateSkillGapSuggestions(gap: SkillGapAnalysis, jobTitle: string): string[] {
+  const suggestions: string[] = [];
+
+  if (gap.missingSkills.length > 0) {
+    const topMissing = gap.missingSkills.slice(0, 3);
+    suggestions.push(
+      `Add missing required skills to resume: ${topMissing.join(", ")}. ` +
+        `Consider taking online courses or completing projects that demonstrate these skills.`,
+    );
+  }
+
+  if (gap.skillCoverage < 60) {
+    suggestions.push(
+      `Your current skills cover only ${gap.skillCoverage}% of ${jobTitle} requirements. ` +
+        `Prioritize acquiring the most critical missing skills before applying.`,
+    );
+  } else if (gap.skillCoverage < 85) {
+    suggestions.push(
+      `You have good foundation (${gap.skillCoverage}% coverage) but some gaps remain. ` +
+        `Strengthen: ${gap.missingSkills.slice(0, 2).join(", ")}.`,
+    );
+  }
+
+  if (gap.matchedSkills.length > 0) {
+    const topMatched = gap.matchedSkills.slice(0, 3);
+    suggestions.push(
+      `Emphasize your existing skills in the resume: ${topMatched.join(", ")}. ` +
+        `Include specific project examples or achievements demonstrating mastery.`,
+    );
+  }
+
+  if (gap.bonusSkills.length > 3) {
+    suggestions.push(
+      `You have ${gap.bonusSkills.length} extra skills beyond requirements. ` +
+        `Highlight top differentiators: ${gap.bonusSkills.slice(0, 2).join(", ")} ` +
+        `to stand out from other candidates.`,
+    );
+  }
+
+  suggestions.push(
+    `Resume Action: Add a separate "Skills" section listing all relevant competencies. ` +
+      `Order by relevance to ${jobTitle}, with proficiency levels (e.g., 5+ years, intermediate).`,
+  );
+
+  return suggestions;
+}
+
+export function calculateSkillMatchPercentage(gap: SkillGapAnalysis, bonusMultiplier = 1.1): number {
+  let score = gap.skillCoverage;
+
+  if (gap.bonusSkills.length > 0) {
+    score = Math.min(100, score * bonusMultiplier);
+  }
+
+  return score;
+}

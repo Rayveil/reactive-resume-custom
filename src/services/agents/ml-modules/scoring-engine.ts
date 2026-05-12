@@ -1,1 +1,206 @@
-/**\n * Hybrid Scoring Engine\n * Inspired by: Placify ML Modules - match score calculation formula\n *\n * Combines semantic similarity (70%) and skill overlap (30%) for hybrid scoring.\n * Provides detailed breakdown and interpretable scores.\n *\n * Pattern: Weighted hybrid scoring with component breakdown\n * Formula: Final Score = (Semantic × 0.7) + (Skills × 0.3)\n */\n\nimport { SemanticMatchConfig, DEFAULT_SEMANTIC_CONFIG } from \"./semantic-matcher\";\nimport { SkillGapAnalysis } from \"./skill-gap-analyzer\";\n\n/**\n * Detailed score breakdown\n * Helps users understand each component of their match score\n */\nexport interface ScoreBreakdown {\n  semanticComponent: {\n    score: number; // 0-100\n    weight: number; // 0.7\n    contribution: number; // Actual contribution to final score\n    interpretation: string; // User-friendly explanation\n  };\n  skillComponent: {\n    score: number; // 0-100\n    weight: number; // 0.3\n    contribution: number; // Actual contribution to final score\n    interpretation: string; // User-friendly explanation\n  };\n  finalScore: number; // 0-100\n  matchTier: \"excellent\" | \"good\" | \"qualified\" | \"unqualified\";\n  tierThresholds: Record<string, { min: number; max: number; description: string }>;\n  reasoning: string; // Overall explanation of the score\n}\n\n/**\n * Standard tier definitions for match quality\n * Adapted from: HRAgent implementation requirements\n */\nexport const MATCH_TIER_THRESHOLDS = {\n  excellent: {\n    min: 90,\n    max: 100,\n    description:\n      \"Excellent match - Highly recommended for interview. Strong alignment on most dimensions.\",\n  },\n  good: {\n    min: 80,\n    max: 89,\n    description: \"Good match - Worth considering. Good alignment with some gaps.\",\n  },\n  qualified: {\n    min: 60,\n    max: 79,\n    description: \"Qualified match - Basic alignment. Multiple gaps to address.\",\n  },\n  unqualified: {\n    min: 0,\n    max: 59,\n    description: \"Unqualified match - Limited alignment. Significant gaps exist.\",\n  },\n};\n\n/**\n * Determine match tier based on final score\n */\nfunction getMatchTier(score: number): \"excellent\" | \"good\" | \"qualified\" | \"unqualified\" {\n  if (score >= 90) return \"excellent\";\n  if (score >= 80) return \"good\";\n  if (score >= 60) return \"qualified\";\n  return \"unqualified\";\n}\n\n/**\n * Generate interpretation for semantic component\n */\nfunction interpretSemanticScore(score: number): string {\n  if (score >= 85) {\n    return \"Strong semantic alignment - Resume content and structure closely match job requirements\";\n  } else if (score >= 70) {\n    return \"Good semantic alignment - Most resume experience relevant to job responsibilities\";\n  } else if (score >= 50) {\n    return \"Moderate semantic alignment - Some relevant experience but gaps in specialization\";\n  }\n  return \"Weak semantic alignment - Resume focus differs significantly from job requirements\";\n}\n\n/**\n * Generate interpretation for skill component\n */\nfunction interpretSkillScore(score: number): string {\n  if (score >= 85) {\n    return \"Excellent skill match - Resume includes most/all required skills\";\n  } else if (score >= 70) {\n    return \"Good skill match - Resume covers majority of required skills\";\n  } else if (score >= 50) {\n    return \"Moderate skill match - Resume covers half of required skills\";\n  }\n  return \"Weak skill match - Resume missing many required skills\";\n}\n\n/**\n * Calculate comprehensive score breakdown\n * Implements Placify hybrid formula with detailed component analysis\n *\n * @param semanticScore Semantic similarity score 0-100\n * @param skillGap Skill gap analysis result\n * @param config Semantic configuration (contains weights)\n * @returns Detailed score breakdown with interpretation\n */\nexport function calculateScoreBreakdown(\n  semanticScore: number,\n  skillGap: SkillGapAnalysis,\n  config: SemanticMatchConfig = DEFAULT_SEMANTIC_CONFIG,\n): ScoreBreakdown {\n  // Skill component is based on coverage (from skill gap analysis)\n  const skillScore = skillGap.skillCoverage;\n\n  // Apply weights (Placify formula: 70% semantic + 30% skill)\n  const semanticContribution = (semanticScore / 100) * config.semanticWeight * 100;\n  const skillContribution = (skillScore / 100) * config.skillWeight * 100;\n\n  // Final score\n  const finalScore = Math.round((semanticContribution + skillContribution) * 10) / 10;\n\n  // Determine tier\n  const tier = getMatchTier(finalScore);\n\n  // Generate interpretations\n  const semanticInterpretation = interpretSemanticScore(semanticScore);\n  const skillInterpretation = interpretSkillScore(skillScore);\n\n  // Overall reasoning\n  const reasoning = generateOverallReasoning(\n    finalScore,\n    tier,\n    semanticScore,\n    skillGap,\n    config,\n  );\n\n  return {\n    semanticComponent: {\n      score: semanticScore,\n      weight: config.semanticWeight,\n      contribution: Math.round(semanticContribution * 10) / 10,\n      interpretation: semanticInterpretation,\n    },\n    skillComponent: {\n      score: skillScore,\n      weight: config.skillWeight,\n      contribution: Math.round(skillContribution * 10) / 10,\n      interpretation: skillInterpretation,\n    },\n    finalScore,\n    matchTier: tier,\n    tierThresholds: MATCH_TIER_THRESHOLDS,\n    reasoning,\n  };\n}\n\n/**\n * Generate overall reasoning explaining the final score\n * Helps candidates understand their match score\n */\nfunction generateOverallReasoning(\n  finalScore: number,\n  tier: string,\n  semanticScore: number,\n  skillGap: SkillGapAnalysis,\n  config: SemanticMatchConfig,\n): string {\n  const semanticPercent = Math.round(config.semanticWeight * 100);\n  const skillPercent = Math.round(config.skillWeight * 100);\n\n  let baseReasoning = `Your match score of ${finalScore}/100 is based on a hybrid formula ` +\n    `(${semanticPercent}% semantic similarity + ${skillPercent}% skill overlap). `;\n\n  if (tier === \"excellent\") {\n    baseReasoning += `Your background strongly aligns with the position. ` +\n      `You have excellent semantic match (${semanticScore}/100) and strong skill coverage (${skillGap.skillCoverage}%). ` +\n      `You are well-prepared for this role.`;\n  } else if (tier === \"good\") {\n    baseReasoning += `Your background is well-aligned with the position. ` +\n      `You have good semantic match (${semanticScore}/100) and solid skill coverage (${skillGap.skillCoverage}%). ` +\n      `Address a few gaps to strengthen your application.`;\n  } else if (tier === \"qualified\") {\n    baseReasoning += `Your background has basic alignment with the position. ` +\n      `You have moderate semantic match (${semanticScore}/100) and partial skill coverage (${skillGap.skillCoverage}%). ` +\n      `Strengthen key skills before applying.`;\n  } else {\n    baseReasoning += `Your background has limited alignment with the position. ` +\n      `Semantic match is ${semanticScore}/100 and skill coverage is only ${skillGap.skillCoverage}%. ` +\n      `Significant preparation needed.`;\n  }\n\n  return baseReasoning;\n}\n\n/**\n * Generate actionable score improvement plan\n * Tells candidates how to improve their score\n */\nexport function generateImprovementPlan(\n  scoreBreakdown: ScoreBreakdown,\n  skillGap: SkillGapAnalysis,\n): string[] {\n  const improvements: string[] = [];\n\n  // If semantic score is low, focus on content/structure\n  if (scoreBreakdown.semanticComponent.score < 70) {\n    improvements.push(\n      `Improve semantic alignment: Rewrite your experience descriptions to directly ` +\n        `address job responsibilities. Use keywords from job posting.`,\n    );\n  }\n\n  // If skill score is low, focus on skill gaps\n  if (scoreBreakdown.skillComponent.score < 70) {\n    if (skillGap.missingSkills.length > 0) {\n      improvements.push(\n        `Critical: Acquire missing skills (${skillGap.missingSkills.slice(0, 2).join(\", \")}). ` +\n          `Take courses or complete projects to demonstrate competency.`,\n      );\n    }\n  }\n\n  // If there are weak skills, suggest strengthening them\n  if (scoreBreakdown.skillComponent.score < 85 && skillGap.weakSkills.length > 0) {\n    improvements.push(\n      `Strengthen weaker skills: Add specific examples of using ${skillGap.weakSkills[0]} ` +\n        `in recent projects or roles.`,\n    );\n  }\n\n  // Leverage bonus skills\n  if (skillGap.bonusSkills.length > 3) {\n    improvements.push(\n      `Highlight differentiators: Emphasize your extra skills ` +\n        `(${skillGap.bonusSkills.slice(0, 2).join(\", \")}) to stand out from other candidates.`,\n    );\n  }\n\n  // Overall score improvement path\n  if (scoreBreakdown.finalScore < 80) {\n    const needsImprovement = 80 - scoreBreakdown.finalScore;\n    improvements.push(\n      `Target improvement: Increase your score by ${Math.ceil(needsImprovement)} points ` +\n        `to reach 'Good' tier. Focus on highest-impact gaps first.`,\n    );\n  }\n\n  return improvements;\n}\n\n/**\n * Validate score breakdown for quality assurance\n */\nexport function validateScoreBreakdown(breakdown: ScoreBreakdown): { valid: boolean; errors: string[] } {\n  const errors: string[] = [];\n\n  // Check component scores in valid range\n  if (breakdown.semanticComponent.score < 0 || breakdown.semanticComponent.score > 100) {\n    errors.push(`Semantic score out of range: ${breakdown.semanticComponent.score}`);\n  }\n\n  if (breakdown.skillComponent.score < 0 || breakdown.skillComponent.score > 100) {\n    errors.push(`Skill score out of range: ${breakdown.skillComponent.score}`);\n  }\n\n  // Check final score calculation\n  const expectedFinal =\n    (breakdown.semanticComponent.contribution + breakdown.skillComponent.contribution) / 100;\n  const actualFinal = breakdown.finalScore / 100;\n\n  if (Math.abs(expectedFinal - actualFinal) > 0.01) {\n    errors.push(`Final score calculation mismatch`);\n  }\n\n  // Check tier matches score\n  const tierDef = breakdown.tierThresholds[breakdown.matchTier];\n  if (\n    breakdown.finalScore < tierDef.min ||\n    breakdown.finalScore > tierDef.max\n  ) {\n    errors.push(\n      `Tier mismatch: Score ${breakdown.finalScore} doesn't match ${breakdown.matchTier} tier`,\n    );\n  }\n\n  return {\n    valid: errors.length === 0,\n    errors,\n  };\n}\n"}
+/**
+ * Hybrid Scoring Engine
+ * Combines semantic similarity and skill overlap into a final match score.
+ */
+
+import type { SemanticMatchConfig } from "./semantic-matcher";
+import type { SkillGapAnalysis } from "./skill-gap-analyzer";
+
+import { DEFAULT_SEMANTIC_CONFIG } from "./semantic-matcher";
+
+export interface ScoreBreakdown {
+  semanticComponent: {
+    score: number;
+    weight: number;
+    contribution: number;
+    interpretation: string;
+  };
+  skillComponent: {
+    score: number;
+    weight: number;
+    contribution: number;
+    interpretation: string;
+  };
+  finalScore: number;
+  matchTier: "excellent" | "good" | "qualified" | "unqualified";
+  tierThresholds: Record<string, { min: number; max: number; description: string }>;
+  reasoning: string;
+}
+
+export const MATCH_TIER_THRESHOLDS = {
+  excellent: {
+    min: 90,
+    max: 100,
+    description: "Excellent match - Highly recommended for interview. Strong alignment on most dimensions.",
+  },
+  good: {
+    min: 80,
+    max: 89,
+    description: "Good match - Worth considering. Good alignment with some gaps.",
+  },
+  qualified: {
+    min: 60,
+    max: 79,
+    description: "Qualified match - Basic alignment. Multiple gaps to address.",
+  },
+  unqualified: {
+    min: 0,
+    max: 59,
+    description: "Unqualified match - Limited alignment. Significant gaps exist.",
+  },
+};
+
+function getMatchTier(score: number): "excellent" | "good" | "qualified" | "unqualified" {
+  if (score >= 90) return "excellent";
+  if (score >= 80) return "good";
+  if (score >= 60) return "qualified";
+  return "unqualified";
+}
+
+function interpretSemanticScore(score: number): string {
+  if (score >= 85) {
+    return "Strong semantic alignment - Resume content and structure closely match job requirements";
+  }
+  if (score >= 70) {
+    return "Good semantic alignment - Most resume experience relevant to job responsibilities";
+  }
+  if (score >= 50) {
+    return "Moderate semantic alignment - Some relevant experience but gaps in specialization";
+  }
+  return "Weak semantic alignment - Resume focus differs significantly from job requirements";
+}
+
+function interpretSkillScore(score: number): string {
+  if (score >= 85) {
+    return "Excellent skill match - Resume includes most/all required skills";
+  }
+  if (score >= 70) {
+    return "Good skill match - Resume covers majority of required skills";
+  }
+  if (score >= 50) {
+    return "Moderate skill match - Resume covers half of required skills";
+  }
+  return "Weak skill match - Resume missing many required skills";
+}
+
+export function calculateScoreBreakdown(
+  semanticScore: number,
+  skillGap: SkillGapAnalysis,
+  config: SemanticMatchConfig = DEFAULT_SEMANTIC_CONFIG,
+): ScoreBreakdown {
+  const skillScore = skillGap.skillCoverage;
+
+  const semanticContribution = (semanticScore / 100) * config.semanticWeight * 100;
+  const skillContribution = (skillScore / 100) * config.skillWeight * 100;
+  const finalScore = Math.round((semanticContribution + skillContribution) * 10) / 10;
+
+  const tier = getMatchTier(finalScore);
+
+  return {
+    semanticComponent: {
+      score: semanticScore,
+      weight: config.semanticWeight,
+      contribution: Math.round(semanticContribution * 10) / 10,
+      interpretation: interpretSemanticScore(semanticScore),
+    },
+    skillComponent: {
+      score: skillScore,
+      weight: config.skillWeight,
+      contribution: Math.round(skillContribution * 10) / 10,
+      interpretation: interpretSkillScore(skillScore),
+    },
+    finalScore,
+    matchTier: tier,
+    tierThresholds: MATCH_TIER_THRESHOLDS,
+    reasoning: generateOverallReasoning(finalScore, tier, semanticScore, skillGap, config),
+  };
+}
+
+function generateOverallReasoning(
+  finalScore: number,
+  tier: string,
+  semanticScore: number,
+  skillGap: SkillGapAnalysis,
+  config: SemanticMatchConfig,
+): string {
+  const semanticPercent = Math.round(config.semanticWeight * 100);
+  const skillPercent = Math.round(config.skillWeight * 100);
+
+  let baseReasoning = `Your match score of ${finalScore}/100 is based on a hybrid formula (${semanticPercent}% semantic similarity + ${skillPercent}% skill overlap). `;
+
+  if (tier === "excellent") {
+    baseReasoning += `Your background strongly aligns with the position. You have excellent semantic match (${semanticScore}/100) and strong skill coverage (${skillGap.skillCoverage}%). You are well-prepared for this role.`;
+  } else if (tier === "good") {
+    baseReasoning += `Your background is well-aligned with the position. You have good semantic match (${semanticScore}/100) and solid skill coverage (${skillGap.skillCoverage}%). Address a few gaps to strengthen your application.`;
+  } else if (tier === "qualified") {
+    baseReasoning += `Your background has basic alignment with the position. You have moderate semantic match (${semanticScore}/100) and partial skill coverage (${skillGap.skillCoverage}%). Strengthen key skills before applying.`;
+  } else {
+    baseReasoning += `Your background has limited alignment with the position. Semantic match is ${semanticScore}/100 and skill coverage is only ${skillGap.skillCoverage}%. Significant preparation needed.`;
+  }
+
+  return baseReasoning;
+}
+
+export function generateImprovementPlan(scoreBreakdown: ScoreBreakdown, skillGap: SkillGapAnalysis): string[] {
+  const improvements: string[] = [];
+
+  if (scoreBreakdown.semanticComponent.score < 70) {
+    improvements.push(
+      "Improve semantic alignment: Rewrite your experience descriptions to directly address job responsibilities. Use keywords from job posting.",
+    );
+  }
+
+  if (scoreBreakdown.skillComponent.score < 70 && skillGap.missingSkills.length > 0) {
+    improvements.push(
+      `Critical: Acquire missing skills (${skillGap.missingSkills.slice(0, 2).join(", ")}). Take courses or complete projects to demonstrate competency.`,
+    );
+  }
+
+  if (scoreBreakdown.skillComponent.score < 85 && skillGap.weakSkills.length > 0) {
+    improvements.push(
+      `Strengthen weaker skills: Add specific examples of using ${skillGap.weakSkills[0]} in recent projects or roles.`,
+    );
+  }
+
+  if (skillGap.bonusSkills.length > 3) {
+    improvements.push(
+      `Highlight differentiators: Emphasize your extra skills (${skillGap.bonusSkills.slice(0, 2).join(", ")}) to stand out from other candidates.`,
+    );
+  }
+
+  if (scoreBreakdown.finalScore < 80) {
+    const needsImprovement = 80 - scoreBreakdown.finalScore;
+    improvements.push(
+      `Target improvement: Increase your score by ${Math.ceil(needsImprovement)} points to reach 'Good' tier. Focus on highest-impact gaps first.`,
+    );
+  }
+
+  return improvements;
+}
+
+export function validateScoreBreakdown(breakdown: ScoreBreakdown): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (breakdown.semanticComponent.score < 0 || breakdown.semanticComponent.score > 100) {
+    errors.push(`Semantic score out of range: ${breakdown.semanticComponent.score}`);
+  }
+
+  if (breakdown.skillComponent.score < 0 || breakdown.skillComponent.score > 100) {
+    errors.push(`Skill score out of range: ${breakdown.skillComponent.score}`);
+  }
+
+  const expectedFinal = breakdown.semanticComponent.contribution + breakdown.skillComponent.contribution;
+  if (Math.abs(expectedFinal - breakdown.finalScore) > 0.01) {
+    errors.push("Final score calculation mismatch");
+  }
+
+  const tierDef = breakdown.tierThresholds[breakdown.matchTier];
+  if (breakdown.finalScore < tierDef.min || breakdown.finalScore > tierDef.max) {
+    errors.push(`Tier mismatch: Score ${breakdown.finalScore} doesn't match ${breakdown.matchTier} tier`);
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}

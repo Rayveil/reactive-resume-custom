@@ -1,1 +1,216 @@
-/**\n * Semantic Matching Engine\n * Inspired by: Placify ML Modules - resume_to_jd_matching/main_analyzer.py\n *\n * Provides semantic similarity matching between resume and job descriptions\n * using lightweight embeddings. Includes fallback logic for environments\n * without transformer models (similar to Placify's TF-IDF fallback).\n *\n * Pattern: Modular semantic matching with multiple backends\n * Performance: ~50-100ms per match (embeddings), <1ms for TF-IDF fallback\n */\n\nimport { textToEmbedding, cosineSimilarity } from \"../shared-memory\";\n\n/**\n * Configuration for semantic matching\n * Inspired by: Placify's all-MiniLM-L6-v2 model configuration\n */\nexport interface SemanticMatchConfig {\n  semanticWeight: number; // 0.7 (70% of score) - from Placify formula\n  skillWeight: number; // 0.3 (30% of score) - from Placify formula\n  embeddingDim: number; // 128 or use transformer if available\n  useTransformer: boolean; // Try SentenceTransformer if available\n}\n\nexport const DEFAULT_SEMANTIC_CONFIG: SemanticMatchConfig = {\n  semanticWeight: 0.7,\n  skillWeight: 0.3,\n  embeddingDim: 128,\n  useTransformer: false, // Can enable if sentence-transformers installed\n};\n\n/**\n * Output structure from semantic matcher\n * Adapted from: Placify's main_analyzer.py output format\n */\nexport interface SemanticMatchResult {\n  semanticSimilarity: number; // 0-1 (raw cosine similarity)\n  semanticScore: number; // 0-100 (converted for display)\n  matchLogic: string; // User-friendly explanation\n  reasoning: string; // Why this similarity score?\n}\n\n/**\n * Extract meaningful text from resume for semantic matching\n * Inspired by: Placify's text extraction in main_analyzer.py\n */\nexport function extractResumeText(resumeData: any): string {\n  const parts: string[] = [];\n\n  try {\n    // Basics\n    if (resumeData.basics) {\n      parts.push(resumeData.basics.headline || \"\");\n      parts.push(resumeData.basics.summary || \"\");\n    }\n\n    // Summary\n    if (resumeData.summary?.content) {\n      parts.push(resumeData.summary.content);\n    }\n\n    // Experience - critical for semantic understanding\n    const experiences = resumeData.sections?.experience?.items || [];\n    for (const exp of experiences) {\n      parts.push(exp.position || \"\");\n      parts.push(exp.company || \"\");\n      parts.push(exp.description || \"\");\n      if (exp.summary) parts.push(exp.summary);\n    }\n\n    // Skills - explicit skills list\n    const skills = resumeData.sections?.skills?.items || [];\n    const skillNames = skills.map((s: any) => s.name).filter(Boolean);\n    if (skillNames.length > 0) {\n      parts.push(`Skills: ${skillNames.join(\", \")}`);\n    }\n\n    // Projects - demonstrates capability\n    const projects = resumeData.sections?.projects?.items || [];\n    for (const proj of projects) {\n      parts.push(proj.name || \"\");\n      parts.push(proj.description || \"\");\n    }\n\n    // Education\n    const education = resumeData.sections?.education?.items || [];\n    for (const edu of education) {\n      parts.push(edu.degree || \"\");\n      parts.push(edu.area || \"\");\n    }\n  } catch (err) {\n    console.error(\"Error extracting resume text:\", err);\n  }\n\n  return parts.filter((p) => p && p.trim().length > 0).join(\" \");\n}\n\n/**\n * Extract meaningful text from job description\n * Inspired by: Placify's JD extraction in main_analyzer.py\n */\nexport function extractJobText(jdInput: any): string {\n  const parts: string[] = [];\n\n  try {\n    // Title and domain are most important\n    parts.push(jdInput.title || \"\");\n    if (jdInput.company) parts.push(jdInput.company);\n\n    // Description\n    parts.push(jdInput.description || \"\");\n\n    // Required skills - explicit requirements\n    if (Array.isArray(jdInput.requiredSkills)) {\n      parts.push(`Required Skills: ${jdInput.requiredSkills.join(\", \")}`);\n    }\n\n    // Industry/Domain\n    if (Array.isArray(jdInput.requiredIndustry)) {\n      parts.push(`Industry: ${jdInput.requiredIndustry.join(\", \")}`);\n    }\n\n    // Personality traits\n    if (Array.isArray(jdInput.personalityTraits)) {\n      parts.push(`Traits: ${jdInput.personalityTraits.join(\", \")}`);\n    }\n\n    // Location\n    if (jdInput.location) parts.push(jdInput.location);\n  } catch (err) {\n    console.error(\"Error extracting job text:\", err);\n  }\n\n  return parts.filter((p) => p && p.trim().length > 0).join(\" \");\n}\n\n/**\n * Calculate semantic similarity between resume and job\n * Core algorithm: Cosine similarity of embeddings\n * Inspired by: Placify's compute_resume_job_match_score()\n *\n * @param resumeData Resume data structure\n * @param jdInput Job description input\n * @param config Semantic matching configuration\n * @returns Semantic similarity score 0-1 and analysis\n */\nexport async function calculateSemanticSimilarity(\n  resumeData: any,\n  jdInput: any,\n  config: SemanticMatchConfig = DEFAULT_SEMANTIC_CONFIG,\n): Promise<SemanticMatchResult> {\n  try {\n    // Extract text from both sides\n    const resumeText = extractResumeText(resumeData);\n    const jobText = extractJobText(jdInput);\n\n    if (!resumeText || !jobText) {\n      return {\n        semanticSimilarity: 0.3, // Low score if insufficient data\n        semanticScore: 30,\n        matchLogic: \"Insufficient resume or job description data\",\n        reasoning:\n          \"Cannot calculate accurate similarity without sufficient text content\",\n      };\n    }\n\n    // Compute embeddings\n    // Using shared-memory's textToEmbedding (lightweight hash-based)\n    // Can be replaced with SentenceTransformer for better results\n    const resumeEmbed = textToEmbedding(resumeText);\n    const jobEmbed = textToEmbedding(jobText);\n\n    // Calculate cosine similarity (0-1 range)\n    const similarity = cosineSimilarity(resumeEmbed, jobEmbed);\n    const normalizedSimilarity = Math.max(0, Math.min(1, similarity));\n\n    // Convert to 0-100 score for display\n    const semanticScore = Math.round(normalizedSimilarity * 100);\n\n    // Generate user-friendly explanation\n    const matchLogic = generateSemanticMatchLogic(normalizedSimilarity, resumeData, jdInput);\n\n    const reasoning = `Semantic similarity calculated by comparing resume content structure ` +\n      `(experience, skills, education) with job description requirements. ` +\n      `Score of ${semanticScore}/100 indicates ${getSimilarityInterpretation(semanticScore)} compatibility.`;\n\n    return {\n      semanticSimilarity: normalizedSimilarity,\n      semanticScore,\n      matchLogic,\n      reasoning,\n    };\n  } catch (err) {\n    console.error(\"Error calculating semantic similarity:\", err);\n    return {\n      semanticSimilarity: 0.5,\n      semanticScore: 50,\n      matchLogic: \"Using fallback semantic similarity\",\n      reasoning: \"Error in similarity calculation; using conservative estimate\",\n    };\n  }\n}\n\n/**\n * Generate user-friendly logic explanation\n * Helps candidates understand why they matched/didn't match\n */\nfunction generateSemanticMatchLogic(similarity: number, resume: any, jd: any): string {\n  const jobTitle = jd.title || \"target position\";\n  const resumeHeadline = resume.basics?.headline || \"current profile\";\n\n  if (similarity >= 0.8) {\n    return `Your ${resumeHeadline} strongly aligns with ${jobTitle}. ` +\n      `Content analysis shows good overlap in core responsibilities, skills, and experience level.`;\n  } else if (similarity >= 0.6) {\n    return `Your ${resumeHeadline} moderately aligns with ${jobTitle}. ` +\n      `Some experience overlap found, but skill gaps or different focus areas identified.`;\n  } else if (similarity >= 0.4) {\n    return `Your ${resumeHeadline} has limited alignment with ${jobTitle}. ` +\n      `Consider strengthening relevant experience or adding domain-specific skills.`;\n  } else {\n    return `Your ${resumeHeadline} shows weak alignment with ${jobTitle}. ` +\n      `Significant skill gaps and experience differences exist. Recommend substantial resume updates.`;\n  }\n}\n\n/**\n * Interpret semantic score for users\n */\nfunction getSimilarityInterpretation(score: number): string {\n  if (score >= 80) return \"excellent\";\n  if (score >= 60) return \"good\";\n  if (score >= 40) return \"moderate\";\n  return \"poor\";\n}\n\n/**\n * Fallback semantic similarity using simple keyword overlap\n * Used when embeddings unavailable (similar to Placify's TF-IDF fallback)\n *\n * Algorithm: Jaccard similarity of keywords\n * Performance: <1ms, no dependencies\n */\nexport function fallbackSemanticSimilarity(resumeText: string, jobText: string): number {\n  try {\n    // Tokenize and normalize\n    const resumeTokens = new Set(\n      resumeText\n        .toLowerCase()\n        .match(/\\b\\w+\\b/g) || [],\n    );\n\n    const jobTokens = new Set(\n      jobText\n        .toLowerCase()\n        .match(/\\b\\w+\\b/g) || [],\n    );\n\n    // Remove common stop words\n    const stopWords = new Set([\n      \"the\",\n      \"a\",\n      \"an\",\n      \"and\",\n      \"or\",\n      \"in\",\n      \"of\",\n      \"to\",\n      \"for\",\n      \"is\",\n      \"was\",\n      \"be\",\n      \"on\",\n      \"with\",\n    ]);\n\n    for (const word of stopWords) {\n      resumeTokens.delete(word);\n      jobTokens.delete(word);\n    }\n\n    // Calculate Jaccard similarity\n    const intersection = new Set([...resumeTokens].filter((x) => jobTokens.has(x)));\n    const union = new Set([...resumeTokens, ...jobTokens]);\n\n    const similarity = union.size > 0 ? intersection.size / union.size : 0;\n    return Math.max(0, Math.min(1, similarity)); // Clamp to [0, 1]\n  } catch (err) {\n    console.error(\"Error in fallback similarity:\", err);\n    return 0.5; // Conservative estimate on error\n  }\n}\n\n/**\n * Compute final match score using hybrid formula\n * Formula inspired by: Placify = (70% semantic + 30% skill match) × 100\n *\n * @param semanticSimilarity Semantic similarity 0-1\n * @param skillMatchPercentage Skill overlap percentage 0-100\n * @param config Configuration weights\n * @returns Final match score 0-100\n */\nexport function computeHybridMatchScore(\n  semanticSimilarity: number,\n  skillMatchPercentage: number,\n  config: SemanticMatchConfig = DEFAULT_SEMANTIC_CONFIG,\n): number {\n  const semanticComponent = semanticSimilarity * 100 * config.semanticWeight;\n  const skillComponent = skillMatchPercentage * config.skillWeight;\n  const finalScore = Math.round((semanticComponent + skillComponent) * 10) / 10;\n  return Math.max(0, Math.min(100, finalScore)); // Clamp to [0, 100]\n}\n"}
+/**
+ * Semantic Matching Engine
+ * Provides semantic similarity matching between resume and job descriptions.
+ */
+
+import { textToEmbedding, cosineSimilarity } from "../shared-memory";
+
+export interface SemanticMatchConfig {
+  semanticWeight: number;
+  skillWeight: number;
+  embeddingDim: number;
+  useTransformer: boolean;
+}
+
+export const DEFAULT_SEMANTIC_CONFIG: SemanticMatchConfig = {
+  semanticWeight: 0.7,
+  skillWeight: 0.3,
+  embeddingDim: 128,
+  useTransformer: false,
+};
+
+export interface SemanticMatchResult {
+  semanticSimilarity: number;
+  semanticScore: number;
+  matchLogic: string;
+  reasoning: string;
+}
+
+export function extractResumeText(resumeData: any): string {
+  const parts: string[] = [];
+
+  try {
+    if (resumeData.basics) {
+      parts.push(resumeData.basics.headline || "");
+      parts.push(resumeData.basics.summary || "");
+    }
+
+    if (resumeData.summary?.content) {
+      parts.push(resumeData.summary.content);
+    }
+
+    const experiences = resumeData.sections?.experience?.items || [];
+    for (const exp of experiences) {
+      parts.push(exp.position || "");
+      parts.push(exp.company || "");
+      parts.push(exp.description || "");
+      if (exp.summary) parts.push(exp.summary);
+    }
+
+    const skills = resumeData.sections?.skills?.items || [];
+    const skillNames = skills.map((s: any) => s.name).filter(Boolean);
+    if (skillNames.length > 0) {
+      parts.push(`Skills: ${skillNames.join(", ")}`);
+    }
+
+    const projects = resumeData.sections?.projects?.items || [];
+    for (const proj of projects) {
+      parts.push(proj.name || "");
+      parts.push(proj.description || "");
+    }
+
+    const education = resumeData.sections?.education?.items || [];
+    for (const edu of education) {
+      parts.push(edu.degree || "");
+      parts.push(edu.area || "");
+    }
+  } catch (error) {
+    console.error("Error extracting resume text:", error);
+  }
+
+  return parts.filter((p) => p && p.trim().length > 0).join(" ");
+}
+
+export function extractJobText(jdInput: any): string {
+  const parts: string[] = [];
+
+  try {
+    parts.push(jdInput.title || "");
+    if (jdInput.company) parts.push(jdInput.company);
+    parts.push(jdInput.description || "");
+
+    if (Array.isArray(jdInput.requiredSkills)) {
+      parts.push(`Required Skills: ${jdInput.requiredSkills.join(", ")}`);
+    }
+
+    if (Array.isArray(jdInput.requiredIndustry)) {
+      parts.push(`Industry: ${jdInput.requiredIndustry.join(", ")}`);
+    }
+
+    if (Array.isArray(jdInput.personalityTraits)) {
+      parts.push(`Traits: ${jdInput.personalityTraits.join(", ")}`);
+    }
+
+    if (jdInput.location) parts.push(jdInput.location);
+  } catch (error) {
+    console.error("Error extracting job text:", error);
+  }
+
+  return parts.filter((p) => p && p.trim().length > 0).join(" ");
+}
+
+export async function calculateSemanticSimilarity(
+  resumeData: any,
+  jdInput: any,
+  _config: SemanticMatchConfig = DEFAULT_SEMANTIC_CONFIG,
+): Promise<SemanticMatchResult> {
+  try {
+    const resumeText = extractResumeText(resumeData);
+    const jobText = extractJobText(jdInput);
+
+    if (!resumeText || !jobText) {
+      return {
+        semanticSimilarity: 0.3,
+        semanticScore: 30,
+        matchLogic: "Insufficient resume or job description data",
+        reasoning: "Cannot calculate accurate similarity without sufficient text content",
+      };
+    }
+
+    const resumeEmbed = textToEmbedding(resumeText);
+    const jobEmbed = textToEmbedding(jobText);
+    const similarity = cosineSimilarity(resumeEmbed, jobEmbed);
+    const normalizedSimilarity = Math.max(0, Math.min(1, similarity));
+    const semanticScore = Math.round(normalizedSimilarity * 100);
+
+    return {
+      semanticSimilarity: normalizedSimilarity,
+      semanticScore,
+      matchLogic: generateSemanticMatchLogic(normalizedSimilarity, resumeData, jdInput),
+      reasoning:
+        `Semantic similarity calculated by comparing resume content structure ` +
+        `(experience, skills, education) with job description requirements. ` +
+        `Score of ${semanticScore}/100 indicates ${getSimilarityInterpretation(semanticScore)} compatibility.`,
+    };
+  } catch (error) {
+    console.error("Error calculating semantic similarity:", error);
+    return {
+      semanticSimilarity: 0.5,
+      semanticScore: 50,
+      matchLogic: "Using fallback semantic similarity",
+      reasoning: "Error in similarity calculation; using conservative estimate",
+    };
+  }
+}
+
+function generateSemanticMatchLogic(similarity: number, resume: any, jd: any): string {
+  const jobTitle = jd.title || "target position";
+  const resumeHeadline = resume.basics?.headline || "current profile";
+
+  if (similarity >= 0.8) {
+    return `Your ${resumeHeadline} strongly aligns with ${jobTitle}. Content analysis shows good overlap in core responsibilities, skills, and experience level.`;
+  }
+  if (similarity >= 0.6) {
+    return `Your ${resumeHeadline} moderately aligns with ${jobTitle}. Some experience overlap found, but skill gaps or different focus areas identified.`;
+  }
+  if (similarity >= 0.4) {
+    return `Your ${resumeHeadline} has limited alignment with ${jobTitle}. Consider strengthening relevant experience or adding domain-specific skills.`;
+  }
+
+  return `Your ${resumeHeadline} shows weak alignment with ${jobTitle}. Significant skill gaps and experience differences exist. Recommend substantial resume updates.`;
+}
+
+function getSimilarityInterpretation(score: number): string {
+  if (score >= 80) return "excellent";
+  if (score >= 60) return "good";
+  if (score >= 40) return "moderate";
+  return "poor";
+}
+
+export function fallbackSemanticSimilarity(resumeText: string, jobText: string): number {
+  try {
+    const resumeTokens = new Set(resumeText.toLowerCase().match(/\b\w+\b/g) || []);
+    const jobTokens = new Set(jobText.toLowerCase().match(/\b\w+\b/g) || []);
+
+    const stopWords = new Set([
+      "the",
+      "a",
+      "an",
+      "and",
+      "or",
+      "in",
+      "of",
+      "to",
+      "for",
+      "is",
+      "was",
+      "be",
+      "on",
+      "with",
+    ]);
+
+    for (const word of stopWords) {
+      resumeTokens.delete(word);
+      jobTokens.delete(word);
+    }
+
+    const intersection = new Set([...resumeTokens].filter((x) => jobTokens.has(x)));
+    const union = new Set([...resumeTokens, ...jobTokens]);
+    const similarity = union.size > 0 ? intersection.size / union.size : 0;
+    return Math.max(0, Math.min(1, similarity));
+  } catch (error) {
+    console.error("Error in fallback similarity:", error);
+    return 0.5;
+  }
+}
+
+export function computeHybridMatchScore(
+  semanticSimilarity: number,
+  skillMatchPercentage: number,
+  config: SemanticMatchConfig = DEFAULT_SEMANTIC_CONFIG,
+): number {
+  const semanticComponent = semanticSimilarity * 100 * config.semanticWeight;
+  const skillComponent = skillMatchPercentage * config.skillWeight;
+  const finalScore = Math.round((semanticComponent + skillComponent) * 10) / 10;
+  return Math.max(0, Math.min(100, finalScore));
+}
